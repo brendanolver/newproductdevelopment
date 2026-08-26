@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], allProducts: [] };
+let state = { stages: [], products: [], allProducts: [], teamMembers: [] };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,17 +82,20 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, allProducts, syncStatus] = await Promise.all([
+    const [timeline, allProducts, syncStatus, teamMembers] = await Promise.all([
       api('/timeline'),
       api('/products?archived=false'),
       api('/am/status'),
+      api('/team-members'),
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
     state.allProducts = allProducts;
+    state.teamMembers = teamMembers;
     renderTimeline();
     renderBoard();
     renderProductsTable();
+    renderTeamMembersTable();
     renderSyncStatus(syncStatus);
   } catch (e) {
     toast(e.message, true);
@@ -153,8 +156,11 @@ function renderTimeline() {
           const entry = p.stages[s.key];
           const done = entry && entry.completed_at;
           const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '—';
+          const ownerBadge = entry && entry.owner_name
+            ? `<span class="stage-owner" title="${escapeHtml(entry.owner_name)}">${escapeHtml(initials(entry.owner_name))}</span>`
+            : '';
           return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}">
-            <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? (s.type === 'date' ? dateLabel : '✓') : '—'}</span>
+            <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? (s.type === 'date' ? dateLabel : '✓') : '—'}</span>${ownerBadge}
           </td>`;
         })
         .join('');
@@ -166,7 +172,7 @@ function renderTimeline() {
       return `<tr>
         <td class="col-product">
           <div class="product-cell">
-            <button class="order-toggle" data-product-id="${p.id}" aria-label="Show open sales orders">▸</button>
+            <button class="order-toggle" data-product-id="${p.id}" aria-label="Show milestone and order details">▸</button>
             ${thumb}
             <div>
               <div class="product-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
@@ -223,14 +229,26 @@ async function toggleOrderDetail(productId, toggleBtn) {
   toggleBtn.classList.add('expanded');
 
   const detailEl = document.getElementById(`order-detail-${productId}`);
-  detailEl.innerHTML = `<span class="order-detail-loading">Loading open sales orders…</span>`;
+  detailEl.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Completed Milestones</div>
+      ${renderMilestonesTable(productId)}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Open Sales Orders — WNDRR ONLINE STORE</div>
+      <span class="order-detail-loading">Loading…</span>
+    </div>
+  `;
+
+  const ordersSection = detailEl.querySelector('.detail-section:last-child');
   try {
     const orders = await api(`/products/${productId}/orders`);
     if (orders.length === 0) {
-      detailEl.innerHTML = `<span class="order-detail-empty">No open Sales Orders for WNDRR ONLINE STORE.</span>`;
+      ordersSection.innerHTML = `<div class="detail-section-title">Open Sales Orders — WNDRR ONLINE STORE</div><span class="order-detail-empty">No open Sales Orders.</span>`;
       return;
     }
-    detailEl.innerHTML = `
+    ordersSection.innerHTML = `
+      <div class="detail-section-title">Open Sales Orders — WNDRR ONLINE STORE</div>
       <table class="order-detail-table">
         <thead><tr><th>Customer PO</th><th>Qty On Order</th></tr></thead>
         <tbody>
@@ -242,8 +260,34 @@ async function toggleOrderDetail(productId, toggleBtn) {
         </tbody>
       </table>`;
   } catch (e) {
-    detailEl.innerHTML = `<span class="order-detail-empty">Couldn't load orders: ${escapeHtml(e.message)}</span>`;
+    ordersSection.innerHTML = `<div class="detail-section-title">Open Sales Orders — WNDRR ONLINE STORE</div><span class="order-detail-empty">Couldn't load orders: ${escapeHtml(e.message)}</span>`;
   }
+}
+
+function renderMilestonesTable(productId) {
+  const product = state.products.find((p) => p.id === productId);
+  const done = state.stages.filter((s) => product.stages[s.key] && product.stages[s.key].completed_at);
+  if (done.length === 0) {
+    return `<span class="order-detail-empty">No milestones completed yet.</span>`;
+  }
+  return `
+    <table class="order-detail-table milestones-table">
+      <thead><tr><th>Milestone</th><th>Date</th><th>Owner</th><th>Note</th></tr></thead>
+      <tbody>
+        ${done
+          .map((s) => {
+            const entry = product.stages[s.key];
+            const dateLabel = new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+            return `<tr>
+              <td>${escapeHtml(s.label)}</td>
+              <td>${dateLabel}</td>
+              <td>${escapeHtml(entry.owner_name || '—')}</td>
+              <td>${escapeHtml(entry.note || '—')}</td>
+            </tr>`;
+          })
+          .join('')}
+      </tbody>
+    </table>`;
 }
 
 // A product's "current stage" is the first stage (in sheet order) that
@@ -416,6 +460,9 @@ function openStageModal(productId, stageKey) {
   document.getElementById('stage-modal-title').textContent = `${stage.label} — ${product.name}`;
   document.getElementById('stage-completed').checked = !!entry.completed_at;
   document.getElementById('stage-date').value = entry.completed_at ? entry.completed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const ownerSelect = document.getElementById('stage-owner');
+  ownerSelect.innerHTML = '<option value="">— unassigned —</option>' + state.teamMembers.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  ownerSelect.value = entry.owner_id || '';
   document.getElementById('stage-note').value = entry.note || '';
   openModal('stage-modal');
 }
@@ -425,15 +472,66 @@ async function saveStage() {
   const { productId, stageKey } = activeCell;
   const completed = document.getElementById('stage-completed').checked;
   const date = document.getElementById('stage-date').value;
+  const owner_id = document.getElementById('stage-owner').value || null;
   const note = document.getElementById('stage-note').value || null;
 
   try {
     await api(`/products/${productId}/stages/${stageKey}`, {
       method: 'PATCH',
-      body: JSON.stringify({ completed, date: completed ? date : null, note }),
+      body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note }),
     });
     closeModal('stage-modal');
     toast('Stage updated');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function initials(name) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
+// ── Team members ─────────────────────────────────────
+function renderTeamMembersTable() {
+  const tbody = document.querySelector('#team-members-table tbody');
+  tbody.innerHTML = state.teamMembers
+    .map(
+      (m) => `<tr><td>${escapeHtml(m.name)}</td><td><button class="link-btn" data-action="delete-member" data-id="${m.id}">Remove</button></td></tr>`
+    )
+    .join('');
+
+  tbody.querySelectorAll('[data-action="delete-member"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Remove this team member? Any milestones they own will become unassigned.')) return;
+      try {
+        await api(`/team-members/${btn.dataset.id}`, { method: 'DELETE' });
+        toast('Team member removed');
+        loadAll();
+      } catch (e) {
+        toast(e.message, true);
+      }
+    });
+  });
+}
+
+function openTeamMemberModal() {
+  document.getElementById('team-member-name').value = '';
+  openModal('team-member-modal');
+}
+
+async function saveTeamMember() {
+  const name = document.getElementById('team-member-name').value;
+  if (!name.trim()) return toast('Name is required', true);
+  try {
+    await api('/team-members', { method: 'POST', body: JSON.stringify({ name }) });
+    closeModal('team-member-modal');
+    toast('Team member added');
     loadAll();
   } catch (e) {
     toast(e.message, true);

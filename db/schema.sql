@@ -36,3 +36,13 @@ CREATE TABLE IF NOT EXISTS product_stages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_product_stages_product_id ON product_stages(product_id);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Added after the initial release — IF NOT EXISTS so this is safe to
+-- re-run against a database that already has product_stages.
+ALTER TABLE product_stages ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL;

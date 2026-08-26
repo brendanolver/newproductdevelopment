@@ -62,6 +62,16 @@
         <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>Source</th><th>Archived</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+
+      <div class="admin-header" style="margin-top:28px;">
+        <h2>Team Members</h2>
+        <button class="btn btn-primary btn-sm" onclick="openTeamMemberModal()">+ Add Team Member</button>
+      </div>
+      <div class="admin-note">Team members can be assigned as the owner of any milestone stage.</div>
+      <table class="admin-table" id="team-members-table">
+        <thead><tr><th>Name</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
 </div>
@@ -103,6 +113,25 @@
   </div>
 </div>
 
+<!-- Team member modal -->
+<div id="team-member-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Team Member</h3>
+      <button class="modal-close" onclick="closeModal('team-member-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>Name
+        <input type="text" id="team-member-name" placeholder="e.g. Rachel">
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('team-member-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTeamMember()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Stage editor modal -->
 <div id="stage-modal" class="modal-backdrop">
   <div class="modal">
@@ -117,6 +146,9 @@
       </label>
       <label>Date
         <input type="date" id="stage-date">
+      </label>
+      <label>Owner <span class="hint">(optional)</span>
+        <select id="stage-owner"><option value="">— unassigned —</option></select>
       </label>
       <label>Note <span class="hint">(optional)</span>
         <textarea id="stage-note"></textarea>

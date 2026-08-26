@@ -11,6 +11,7 @@ const productRoutes = require('./routes/products');
 const stageRoutes = require('./routes/stages');
 const boardRoutes = require('./routes/board');
 const amRoutes = require('./routes/am');
+const teamMemberRoutes = require('./routes/teamMembers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +25,7 @@ app.use('/api/products', requireAuth, productRoutes);
 app.use('/api/products/:id/stages', requireAuth, stageRoutes);
 app.use('/api/timeline', requireAuth, boardRoutes);
 app.use('/api/am', requireAuth, amRoutes);
+app.use('/api/team-members', requireAuth, teamMemberRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

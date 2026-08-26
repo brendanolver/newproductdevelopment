@@ -19,7 +19,10 @@ router.get('/', async (req, res, next) => {
 
     const ids = products.map((p) => p.id);
     const stagesResult = await pool.query(
-      `SELECT * FROM product_stages WHERE product_id = ANY($1::int[])`,
+      `SELECT ps.*, tm.name AS owner_name
+       FROM product_stages ps
+       LEFT JOIN team_members tm ON tm.id = ps.owner_id
+       WHERE ps.product_id = ANY($1::int[])`,
       [ids]
     );
 
@@ -29,6 +32,8 @@ router.get('/', async (req, res, next) => {
       stagesByProduct.get(row.product_id)[row.stage_key] = {
         completed_at: row.completed_at,
         note: row.note,
+        owner_id: row.owner_id,
+        owner_name: row.owner_name,
       };
     }
 
