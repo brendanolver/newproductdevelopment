@@ -24,4 +24,11 @@ const STAGES = [
 const STAGE_KEYS = STAGES.map((s) => s.key);
 const STAGE_BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s]));
 
-module.exports = { STAGES, STAGE_KEYS, STAGE_BY_KEY };
+// A product's "current stage" is the first stage (in sheet order) that
+// isn't done yet — mirrors the client-side version in public/app.js.
+// null means every stage is complete.
+function currentStage(stageMap) {
+  return STAGES.find((s) => !(stageMap[s.key] && stageMap[s.key].completed_at)) || null;
+}
+
+module.exports = { STAGES, STAGE_KEYS, STAGE_BY_KEY, currentStage };

@@ -133,6 +133,16 @@ async function syncNow() {
   }
 }
 
+async function sendWeeklyEmailNow() {
+  if (!confirm('Send the weekly outstanding-styles email right now, to brendan@kohindustries.com and sheridan@kohindustries.com?')) return;
+  try {
+    const result = await api('/email/send-weekly', { method: 'POST' });
+    toast(`Email sent: ${result.outstandingCount} outstanding (${result.atRiskCount} at risk)`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 function daysToLaunchLabel(days) {
   if (days === null || days === undefined) return '';
   if (days < 0) return `Launched ${Math.abs(days)}d ago`;

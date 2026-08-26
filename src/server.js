@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const { runMigrations } = require('./db');
 const { requireAuth } = require('./auth');
 const { syncFromAM } = require('./lib/amSync');
+const { startScheduledJobs } = require('./scheduledJobs');
 
 const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
@@ -12,6 +13,7 @@ const stageRoutes = require('./routes/stages');
 const boardRoutes = require('./routes/board');
 const amRoutes = require('./routes/am');
 const teamMemberRoutes = require('./routes/teamMembers');
+const emailRoutes = require('./routes/email');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +28,7 @@ app.use('/api/products/:id/stages', requireAuth, stageRoutes);
 app.use('/api/timeline', requireAuth, boardRoutes);
 app.use('/api/am', requireAuth, amRoutes);
 app.use('/api/team-members', requireAuth, teamMemberRoutes);
+app.use('/api/email', requireAuth, emailRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -45,6 +48,8 @@ async function start() {
   setInterval(() => {
     syncFromAM().catch((err) => console.error('Scheduled AM sync failed:', err.message));
   }, SYNC_INTERVAL_MS);
+
+  startScheduledJobs();
 }
 
 start().catch((err) => {
