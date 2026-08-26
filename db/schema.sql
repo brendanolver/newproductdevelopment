@@ -46,3 +46,13 @@ CREATE TABLE IF NOT EXISTS team_members (
 -- Added after the initial release — IF NOT EXISTS so this is safe to
 -- re-run against a database that already has product_stages.
 ALTER TABLE product_stages ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL;
+
+-- Default owner per stage (set in Admin), so opening a stage that's never
+-- been touched for a given product pre-fills its owner instead of starting
+-- unassigned every time. Purely a UI convenience default — once a product's
+-- stage has its own owner_id saved, changing the default here doesn't touch it.
+CREATE TABLE IF NOT EXISTS stage_default_owners (
+  stage_key VARCHAR(64) PRIMARY KEY,
+  owner_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

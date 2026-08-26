@@ -45,6 +45,12 @@
 
   <main>
     <section id="tab-timeline" class="tab-panel active">
+      <div class="selection-bar">
+        <span id="selection-count">0 selected</span>
+        <button class="btn btn-ghost btn-sm" onclick="expandSelected()">Expand Selected</button>
+        <button class="btn btn-ghost btn-sm" onclick="collapseSelected()">Collapse Selected</button>
+        <button class="btn btn-ghost btn-sm" onclick="collapseAll()">Collapse All</button>
+      </div>
       <div id="timeline-container"></div>
     </section>
 
@@ -70,6 +76,15 @@
       <div class="admin-note">Team members can be assigned as the owner of any milestone stage.</div>
       <table class="admin-table" id="team-members-table">
         <thead><tr><th>Name</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="admin-header" style="margin-top:28px;">
+        <h2>Milestone Default Owners</h2>
+      </div>
+      <div class="admin-note">Set a default owner per milestone so it's pre-filled when you mark that stage for a product — no need to pick it every time. Changing a default here doesn't affect stages already saved.</div>
+      <table class="admin-table" id="stage-defaults-table">
+        <thead><tr><th>Milestone</th><th>Default Owner</th></tr></thead>
         <tbody></tbody>
       </table>
 

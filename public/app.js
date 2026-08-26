@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], allProducts: [], teamMembers: [] };
+let state = { stages: [], products: [], allProducts: [], teamMembers: [], stageDefaults: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,20 +82,26 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, allProducts, syncStatus, teamMembers] = await Promise.all([
+    const [timeline, allProducts, syncStatus, teamMembers, stageDefaults] = await Promise.all([
       api('/timeline'),
       api('/products?archived=false'),
       api('/am/status'),
       api('/team-members'),
+      api('/stage-defaults'),
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
     state.allProducts = allProducts;
     state.teamMembers = teamMembers;
+    state.stageDefaults = stageDefaults;
+    // Products still active drop out of selection automatically.
+    const activeIds = new Set(state.products.map((p) => p.id));
+    state.selectedProductIds = new Set([...state.selectedProductIds].filter((id) => activeIds.has(id)));
     renderTimeline();
     renderBoard();
     renderProductsTable();
     renderTeamMembersTable();
+    renderStageDefaultsTable();
     renderSyncStatus(syncStatus);
   } catch (e) {
     toast(e.message, true);
@@ -182,6 +188,7 @@ function renderTimeline() {
       return `<tr>
         <td class="col-product">
           <div class="product-cell">
+            <input type="checkbox" class="row-select" data-product-id="${p.id}" ${state.selectedProductIds.has(p.id) ? 'checked' : ''}>
             <button class="order-toggle" data-product-id="${p.id}" aria-label="Show milestone and order details">▸</button>
             ${thumb}
             <div>
@@ -201,10 +208,12 @@ function renderTimeline() {
     })
     .join('');
 
+  const allSelected = state.products.length > 0 && state.products.every((p) => state.selectedProductIds.has(p.id));
+
   container.innerHTML = `
     <div class="timeline-scroll">
       <table class="timeline-grid">
-        <thead><tr><th class="col-product">Product</th>${stageHeaders}</tr></thead>
+        <thead><tr><th class="col-product"><input type="checkbox" class="row-select" id="select-all-rows" ${allSelected ? 'checked' : ''}> Product</th>${stageHeaders}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -219,25 +228,79 @@ function renderTimeline() {
   container.querySelectorAll('.order-toggle').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      toggleOrderDetail(Number(btn.dataset.productId), btn);
+      const productId = Number(btn.dataset.productId);
+      const row = document.querySelector(`.order-detail-row[data-product-id="${productId}"]`);
+      setDetailOpen(productId, row.style.display === 'none');
     });
+  });
+
+  container.querySelectorAll('.row-select[data-product-id]').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const productId = Number(cb.dataset.productId);
+      if (cb.checked) state.selectedProductIds.add(productId);
+      else state.selectedProductIds.delete(productId);
+      updateSelectionBar();
+    });
+  });
+
+  const selectAllCb = document.getElementById('select-all-rows');
+  if (selectAllCb) {
+    selectAllCb.addEventListener('change', () => {
+      if (selectAllCb.checked) state.products.forEach((p) => state.selectedProductIds.add(p.id));
+      else state.selectedProductIds.clear();
+      renderTimeline();
+      updateSelectionBar();
+    });
+  }
+
+  updateSelectionBar();
+
+  // Re-open any rows that were expanded before this re-render (e.g. after
+  // saving a stage change) so bulk-expanded rows don't collapse on reload.
+  state.expandedProductIds.forEach((productId) => {
+    if (state.products.some((p) => p.id === productId)) setDetailOpen(productId, true);
   });
 }
 
-async function toggleOrderDetail(productId, toggleBtn) {
+function updateSelectionBar() {
+  const el = document.getElementById('selection-count');
+  if (el) el.textContent = `${state.selectedProductIds.size} selected`;
+}
+
+function expandSelected() {
+  state.selectedProductIds.forEach((id) => setDetailOpen(id, true));
+}
+function collapseSelected() {
+  state.selectedProductIds.forEach((id) => setDetailOpen(id, false));
+}
+function collapseAll() {
+  state.products.forEach((p) => setDetailOpen(p.id, false));
+}
+
+function setDetailOpen(productId, open) {
   const row = document.querySelector(`.order-detail-row[data-product-id="${productId}"]`);
+  const toggleBtn = document.querySelector(`.order-toggle[data-product-id="${productId}"]`);
+  if (!row || !toggleBtn) return;
   const isOpen = row.style.display !== 'none';
-  if (isOpen) {
+  if (open === isOpen) return;
+
+  if (!open) {
     row.style.display = 'none';
     toggleBtn.textContent = '▸';
     toggleBtn.classList.remove('expanded');
+    state.expandedProductIds.delete(productId);
     return;
   }
 
   row.style.display = 'table-row';
   toggleBtn.textContent = '▾';
   toggleBtn.classList.add('expanded');
+  state.expandedProductIds.add(productId);
+  loadDetailContent(productId);
+}
 
+async function loadDetailContent(productId) {
   const detailEl = document.getElementById(`order-detail-${productId}`);
   detailEl.innerHTML = `
     <div class="detail-section">
@@ -472,7 +535,11 @@ function openStageModal(productId, stageKey) {
   document.getElementById('stage-date').value = entry.completed_at ? entry.completed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const ownerSelect = document.getElementById('stage-owner');
   ownerSelect.innerHTML = '<option value="">— unassigned —</option>' + state.teamMembers.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
-  ownerSelect.value = entry.owner_id || '';
+  // If this specific product's stage has never had an owner set, pre-fill
+  // with the configured default for this stage (Admin > Milestone Default
+  // Owners) rather than starting unassigned every time.
+  const defaultOwner = state.stageDefaults.find((d) => d.stage_key === stageKey);
+  ownerSelect.value = entry.owner_id || (defaultOwner && defaultOwner.owner_id) || '';
   document.getElementById('stage-note').value = entry.note || '';
   openModal('stage-modal');
 }
@@ -546,6 +613,40 @@ async function saveTeamMember() {
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+// ── Milestone default owners ─────────────────────────
+function renderStageDefaultsTable() {
+  const tbody = document.querySelector('#stage-defaults-table tbody');
+  tbody.innerHTML = state.stageDefaults
+    .map(
+      (d) => `<tr>
+        <td>${escapeHtml(d.label)}</td>
+        <td>
+          <select data-stage-key="${d.stage_key}" class="stage-default-select">
+            <option value="">— unassigned —</option>
+            ${state.teamMembers.map((m) => `<option value="${m.id}" ${d.owner_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+          </select>
+        </td>
+      </tr>`
+    )
+    .join('');
+
+  tbody.querySelectorAll('.stage-default-select').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      try {
+        await api(`/stage-defaults/${sel.dataset.stageKey}`, {
+          method: 'PUT',
+          body: JSON.stringify({ owner_id: sel.value || null }),
+        });
+        toast('Default owner updated');
+        const d = state.stageDefaults.find((x) => x.stage_key === sel.dataset.stageKey);
+        if (d) d.owner_id = sel.value ? Number(sel.value) : null;
+      } catch (e) {
+        toast(e.message, true);
+      }
+    });
+  });
 }
 
 function escapeHtml(str) {

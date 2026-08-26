@@ -69,6 +69,9 @@ main{padding:20px 24px;}
 .tab-panel.active{display:block;}
 
 /* ── TIMELINE GRID ── */
+.selection-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text-secondary);}
+.selection-bar #selection-count{font-weight:600;margin-right:4px;}
+.row-select{margin:0;flex-shrink:0;cursor:pointer;}
 .timeline-scroll{overflow-x:auto;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);}
 .timeline-grid{border-collapse:collapse;width:100%;}
 .timeline-grid th, .timeline-grid td{border-bottom:1px solid var(--border);padding:0;white-space:nowrap;}
