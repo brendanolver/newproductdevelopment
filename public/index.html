@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WNDRR — Product Timeline</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧵</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="password-screen">
+  <div class="pw-card">
+    <div class="wndrr-logo">
+      <div class="logo-mark">🧵</div>
+      <div class="logo-text">WNDRR<span>Product Timeline</span></div>
+    </div>
+    <div class="pw-title">Product Timeline</div>
+    <div class="pw-sub">Enter your password to access the tracker</div>
+    <input class="pw-input" type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
+    <button class="pw-submit" onclick="login()">Access Tracker &rarr;</button>
+    <div class="pw-error" id="pw-error">Incorrect password. Please try again.</div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="topbar">
+    <div class="wndrr-logo">
+      <div class="logo-mark">🧵</div>
+      <div class="logo-text">WNDRR<span>Product Timeline</span></div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="timeline">Timeline</button>
+      <button class="tab-btn" data-tab="admin">Admin</button>
+    </nav>
+    <div class="topbar-actions">
+      <span class="sync-status" id="sync-status"></span>
+      <button class="btn btn-ghost btn-sm" id="sync-now-btn" onclick="syncNow()">Sync Apparel Magic</button>
+      <button class="btn btn-primary" id="new-product-btn" onclick="openProductModal()">+ New Product</button>
+      <button class="btn btn-ghost" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="tab-timeline" class="tab-panel active">
+      <div id="timeline-container"></div>
+    </section>
+
+    <section id="tab-admin" class="tab-panel">
+      <div class="admin-header">
+        <h2>All Products</h2>
+        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ New Product</button>
+      </div>
+      <div class="admin-note">AM-sourced products sync automatically (gated on Apparel Magic's Box Size field being set). Add anything else here manually.</div>
+      <table class="admin-table" id="products-table">
+        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>Source</th><th>Archived</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Product modal (manual add/edit) -->
+<div id="product-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="product-modal-title">New Product</h3>
+      <button class="modal-close" onclick="closeModal('product-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="product-id">
+      <label>Style code
+        <input type="text" id="product-style-code" placeholder="e.g. W26JK017AGY">
+      </label>
+      <label>Name
+        <input type="text" id="product-name">
+      </label>
+      <div class="field-row">
+        <label>Category
+          <input type="text" id="product-category">
+        </label>
+        <label>Launch date
+          <input type="date" id="product-launch-date">
+        </label>
+      </div>
+      <label>Image URL <span class="hint">(optional)</span>
+        <input type="text" id="product-image-url" placeholder="https://...">
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="product-delete-btn" style="display:none;" onclick="deleteProduct()">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stage editor modal -->
+<div id="stage-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="stage-modal-title">Stage</h3>
+      <button class="modal-close" onclick="closeModal('stage-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label class="checkbox-label">
+        <input type="checkbox" id="stage-completed">
+        Done
+      </label>
+      <label>Date
+        <input type="date" id="stage-date">
+      </label>
+      <label>Note <span class="hint">(optional)</span>
+        <textarea id="stage-note"></textarea>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('stage-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStage()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
