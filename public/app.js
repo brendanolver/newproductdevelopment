@@ -91,6 +91,7 @@ async function loadAll() {
     state.products = timeline.products;
     state.allProducts = allProducts;
     renderTimeline();
+    renderBoard();
     renderProductsTable();
     renderSyncStatus(syncStatus);
   } catch (e) {
@@ -192,6 +193,65 @@ function renderTimeline() {
       openStageModal(Number(cell.dataset.productId), cell.dataset.stageKey);
     });
   });
+}
+
+// A product's "current stage" is the first stage (in sheet order) that
+// isn't done yet — the thing actually holding it up. null means every
+// stage is complete.
+function currentStageFor(product) {
+  return state.stages.find((s) => !(product.stages[s.key] && product.stages[s.key].completed_at)) || null;
+}
+
+function renderBoard() {
+  const container = document.getElementById('board-container');
+  if (state.products.length === 0) {
+    container.innerHTML = `<div class="empty-state">No active products yet. Sync Apparel Magic, or add one manually with "+ New Product".</div>`;
+    return;
+  }
+
+  const byStage = new Map(state.stages.map((s) => [s.key, []]));
+  const complete = [];
+  state.products.forEach((p) => {
+    const stage = currentStageFor(p);
+    if (stage) byStage.get(stage.key).push(p);
+    else complete.push(p);
+  });
+
+  const columns = state.stages
+    .map((s) => renderBoardColumn(s.label, byStage.get(s.key), false))
+    .join('') + renderBoardColumn('Complete', complete, true);
+
+  container.innerHTML = `<div class="board">${columns}</div>`;
+
+  container.querySelectorAll('.board-card[data-product-id]').forEach((card) => {
+    card.addEventListener('click', () => {
+      openStageModal(Number(card.dataset.productId), card.dataset.stageKey);
+    });
+  });
+}
+
+function renderBoardColumn(label, cards, isComplete) {
+  const cardsHtml = cards
+    .map((p) => {
+      const thumb = p.image_url
+        ? `<img class="product-thumb" src="${p.image_url}" alt="">`
+        : `<div class="product-thumb placeholder">🧵</div>`;
+      const stage = isComplete ? null : currentStageFor(p);
+      return `<div class="board-card ${isComplete ? 'complete-card' : ''}" ${stage ? `data-product-id="${p.id}" data-stage-key="${stage.key}"` : ''}>
+        ${thumb}
+        <div class="board-card-body">
+          <div class="board-card-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
+          <div class="board-card-style">${escapeHtml(p.style_code)}</div>
+          <div class="board-card-launch ${p.at_risk ? 'at-risk' : ''}">${p.launch_date ? new Date(p.launch_date).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'No launch date'} ${p.days_to_launch !== null ? '· ' + daysToLaunchLabel(p.days_to_launch) : ''}</div>
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  return `<div class="board-column ${isComplete ? 'complete-column' : ''}">
+    <div class="board-column-header"><span>${escapeHtml(label)}</span><span class="board-column-count">${cards.length}</span></div>
+    ${cardsHtml}
+  </div>`;
 }
 
 function renderProductsTable() {
