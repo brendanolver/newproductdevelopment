@@ -45,4 +45,44 @@ async function fetchAllProducts({ onPage } = {}) {
   return all;
 }
 
-module.exports = { fetchAllProducts };
+// WNDRR ONLINE STORE customer_id in AM — confirmed against real orders
+// (same id demandplanning targets for its AM order push).
+const WNDRR_ONLINE_STORE_CUSTOMER_ID = '1068';
+
+// Open Sales Orders (customer PO + outstanding qty) for a style, restricted
+// to the WNDRR ONLINE STORE customer. order_items can be filtered directly
+// by style_number, but doesn't carry customer_id or the PO number — those
+// live on the order header, so each distinct order_id needs a follow-up
+// lookup. Open-order counts per style are small in practice (a handful),
+// so the extra round trips are cheap for an on-demand dropdown fetch.
+async function fetchOpenOrdersForStyle(styleNumber) {
+  const itemsData = await amGet('order_items', { style_number: styleNumber });
+  const items = itemsData.response || [];
+
+  const qtyOpenByOrder = new Map();
+  for (const item of items) {
+    const qtyOpen = parseFloat(item.qty_open) || 0;
+    if (qtyOpen <= 0) continue;
+    qtyOpenByOrder.set(item.order_id, (qtyOpenByOrder.get(item.order_id) || 0) + qtyOpen);
+  }
+  if (qtyOpenByOrder.size === 0) return [];
+
+  const orders = await Promise.all(
+    [...qtyOpenByOrder.keys()].map((orderId) => amGet('orders', { order_id: orderId }))
+  );
+
+  const results = [];
+  orders.forEach((data, i) => {
+    const order = (data.response || [])[0];
+    const orderId = [...qtyOpenByOrder.keys()][i];
+    if (!order || order.customer_id !== WNDRR_ONLINE_STORE_CUSTOMER_ID) return;
+    results.push({
+      order_id: orderId,
+      customer_po: order.customer_po || null,
+      qty_open: qtyOpenByOrder.get(orderId),
+    });
+  });
+  return results;
+}
+
+module.exports = { fetchAllProducts, fetchOpenOrdersForStyle };

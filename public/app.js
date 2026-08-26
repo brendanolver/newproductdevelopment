@@ -166,6 +166,7 @@ function renderTimeline() {
       return `<tr>
         <td class="col-product">
           <div class="product-cell">
+            <button class="order-toggle" data-product-id="${p.id}" aria-label="Show open sales orders">▸</button>
             ${thumb}
             <div>
               <div class="product-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
@@ -175,6 +176,11 @@ function renderTimeline() {
           </div>
         </td>
         ${cells}
+      </tr>
+      <tr class="order-detail-row" data-product-id="${p.id}" style="display:none;">
+        <td class="order-detail-cell" colspan="${1 + state.stages.length}">
+          <div class="order-detail" id="order-detail-${p.id}"></div>
+        </td>
       </tr>`;
     })
     .join('');
@@ -193,6 +199,51 @@ function renderTimeline() {
       openStageModal(Number(cell.dataset.productId), cell.dataset.stageKey);
     });
   });
+
+  container.querySelectorAll('.order-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleOrderDetail(Number(btn.dataset.productId), btn);
+    });
+  });
+}
+
+async function toggleOrderDetail(productId, toggleBtn) {
+  const row = document.querySelector(`.order-detail-row[data-product-id="${productId}"]`);
+  const isOpen = row.style.display !== 'none';
+  if (isOpen) {
+    row.style.display = 'none';
+    toggleBtn.textContent = '▸';
+    toggleBtn.classList.remove('expanded');
+    return;
+  }
+
+  row.style.display = 'table-row';
+  toggleBtn.textContent = '▾';
+  toggleBtn.classList.add('expanded');
+
+  const detailEl = document.getElementById(`order-detail-${productId}`);
+  detailEl.innerHTML = `<span class="order-detail-loading">Loading open sales orders…</span>`;
+  try {
+    const orders = await api(`/products/${productId}/orders`);
+    if (orders.length === 0) {
+      detailEl.innerHTML = `<span class="order-detail-empty">No open Sales Orders for WNDRR ONLINE STORE.</span>`;
+      return;
+    }
+    detailEl.innerHTML = `
+      <table class="order-detail-table">
+        <thead><tr><th>Customer PO</th><th>Qty On Order</th></tr></thead>
+        <tbody>
+          ${orders
+            .map(
+              (o) => `<tr><td>${escapeHtml(o.customer_po || '(no PO)')}</td><td>${o.qty_open}</td></tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    detailEl.innerHTML = `<span class="order-detail-empty">Couldn't load orders: ${escapeHtml(e.message)}</span>`;
+  }
 }
 
 // A product's "current stage" is the first stage (in sheet order) that
