@@ -172,11 +172,17 @@ function renderTimeline() {
           const entry = p.stages[s.key];
           const done = entry && entry.completed_at;
           const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '';
-          const ownerLabel = done ? entry.owner_name || '—' : '';
+          // Not yet ticked: still show the configured default owner (so you
+          // can see who's on the hook before the stage is done), but never a
+          // date — it hasn't happened. Marked "default" (dimmed/italic) since
+          // it's a prediction, not a confirmed owner for this product.
+          const defaultOwner = state.stageDefaults.find((d) => d.stage_key === s.key);
+          const ownerName = done ? entry.owner_name || '—' : (defaultOwner && defaultOwner.owner_name) || '';
+          const ownerClass = done ? 'stage-meta-owner' : 'stage-meta-owner default';
           return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}">
             <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>
             <div class="stage-meta">
-              <div class="stage-meta-owner">${ownerLabel ? escapeHtml(ownerLabel) : '&nbsp;'}</div>
+              <div class="${ownerClass}">${ownerName ? escapeHtml(ownerName) : '&nbsp;'}</div>
               <div class="stage-meta-date">${dateLabel ? escapeHtml(dateLabel) : '&nbsp;'}</div>
             </div>
           </td>`;
