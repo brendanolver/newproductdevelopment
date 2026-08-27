@@ -35,6 +35,7 @@
       <button class="tab-btn" data-tab="admin">Admin</button>
     </nav>
     <div class="topbar-actions">
+      <input type="search" id="product-search" class="search-input" placeholder="Search products…" oninput="handleProductSearch()">
       <span class="sync-status" id="sync-status"></span>
       <button class="btn btn-ghost btn-sm" id="sync-now-btn" onclick="syncNow()">Sync Apparel Magic</button>
       <button class="btn btn-primary" id="new-product-btn" onclick="openProductModal()">+ New Product</button>

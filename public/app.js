@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], archivedProducts: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, emailRecipients: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
+let state = { stages: [], products: [], archivedProducts: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, emailRecipients: [], selectedProductIds: new Set(), expandedProductIds: new Set(), searchQuery: '' };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -78,6 +78,24 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
   });
 });
+
+// ── Search ───────────────────────────────────────────
+// Filters by name or style code — used by both Timeline and Board so the
+// same search box narrows either view without touching state.products
+// itself (selection, KPIs, etc. still see every active product).
+function getVisibleProducts() {
+  const q = state.searchQuery.trim().toLowerCase();
+  if (!q) return state.products;
+  return state.products.filter(
+    (p) => (p.name && p.name.toLowerCase().includes(q)) || (p.style_code && p.style_code.toLowerCase().includes(q))
+  );
+}
+
+function handleProductSearch() {
+  state.searchQuery = document.getElementById('product-search').value;
+  renderTimeline();
+  renderBoard();
+}
 
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
@@ -299,6 +317,12 @@ function renderTimeline() {
     return;
   }
 
+  const visibleProducts = getVisibleProducts();
+  if (visibleProducts.length === 0) {
+    container.innerHTML = `<div class="empty-state">No products match "${escapeHtml(state.searchQuery)}".</div>`;
+    return;
+  }
+
   const stageHeaders = state.stages
     .map(
       (s) => `<th class="stage-header-clickable" data-stage-key="${s.key}" title="${escapeHtml(s.label)} — select products, then click to mark done for all of them">${escapeHtml(s.label)}</th>`
@@ -308,7 +332,7 @@ function renderTimeline() {
     (cat) => `<th class="col-launch-type" data-tooltip="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}">${cat}</th>`
   ).join('');
 
-  const rows = state.products
+  const rows = visibleProducts
     .map((p) => {
       const cells = state.stages
         .map((s) => {
@@ -388,7 +412,7 @@ function renderTimeline() {
     })
     .join('');
 
-  const allSelected = state.products.length > 0 && state.products.every((p) => state.selectedProductIds.has(p.id));
+  const allSelected = visibleProducts.length > 0 && visibleProducts.every((p) => state.selectedProductIds.has(p.id));
 
   container.innerHTML = `
     <div class="timeline-scroll">
@@ -470,8 +494,8 @@ function renderTimeline() {
   const selectAllCb = document.getElementById('select-all-rows');
   if (selectAllCb) {
     selectAllCb.addEventListener('change', () => {
-      if (selectAllCb.checked) state.products.forEach((p) => state.selectedProductIds.add(p.id));
-      else state.selectedProductIds.clear();
+      if (selectAllCb.checked) visibleProducts.forEach((p) => state.selectedProductIds.add(p.id));
+      else visibleProducts.forEach((p) => state.selectedProductIds.delete(p.id));
       renderTimeline();
       updateSelectionBar();
     });
@@ -661,9 +685,15 @@ function renderBoard() {
     return;
   }
 
+  const visibleProducts = getVisibleProducts();
+  if (visibleProducts.length === 0) {
+    container.innerHTML = `<div class="empty-state">No products match "${escapeHtml(state.searchQuery)}".</div>`;
+    return;
+  }
+
   const byStage = new Map(state.stages.map((s) => [s.key, []]));
   const complete = [];
-  state.products.forEach((p) => {
+  visibleProducts.forEach((p) => {
     const stage = currentStageFor(p);
     if (stage) byStage.get(stage.key).push(p);
     else complete.push(p);
