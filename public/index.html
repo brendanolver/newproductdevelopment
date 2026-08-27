@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WNDRR — Product Timeline</title>
+<title>Out of Range Products</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧵</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -14,9 +14,9 @@
   <div class="pw-card">
     <div class="wndrr-logo">
       <div class="logo-mark">🧵</div>
-      <div class="logo-text">WNDRR<span>Product Timeline</span></div>
+      <div class="logo-text">OUT OF RANGE<span>PRODUCTS</span></div>
     </div>
-    <div class="pw-title">Product Timeline</div>
+    <div class="pw-title">Out of Range Products</div>
     <div class="pw-sub">Enter your password to access the tracker</div>
     <input class="pw-input" type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
     <button class="pw-submit" onclick="login()">Access Tracker &rarr;</button>
@@ -28,7 +28,7 @@
   <header class="topbar">
     <div class="wndrr-logo">
       <div class="logo-mark">🧵</div>
-      <div class="logo-text">WNDRR<span>Product Timeline</span></div>
+      <div class="logo-text">OUT OF RANGE<span>PRODUCTS</span></div>
     </div>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="timeline">Timeline</button>
@@ -45,6 +45,7 @@
 
   <main>
     <section id="tab-timeline" class="tab-panel active">
+      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div class="selection-bar">
         <span id="selection-count">0 selected</span>
         <button class="btn btn-ghost btn-sm" onclick="expandSelected()">Expand Selected</button>
@@ -55,10 +56,12 @@
     </section>
 
     <section id="tab-board" class="tab-panel">
+      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div id="board-container"></div>
     </section>
 
     <section id="tab-admin" class="tab-panel">
+      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div class="admin-header">
         <h2>All Products</h2>
         <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ New Product</button>
