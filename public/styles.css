@@ -123,6 +123,7 @@ main{padding:20px 24px;}
 .stage-meta-owner{font-size:9.5px;font-weight:600;color:var(--text-secondary);}
 .stage-meta-owner.default{font-weight:400;font-style:italic;color:var(--text-muted);}
 .stage-meta-date{font-size:9px;color:var(--text-muted);}
+.stage-meta-date.due{color:var(--amber);font-weight:700;font-style:normal;}
 
 .source-badge{display:inline-block;padding:1px 6px;border-radius:var(--r-pill);font-size:9px;font-weight:700;text-transform:uppercase;margin-left:6px;}
 .source-badge.am{background:var(--teal-light);color:var(--teal-dark);}

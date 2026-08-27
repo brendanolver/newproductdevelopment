@@ -261,7 +261,17 @@ function renderTimeline() {
             </td>`;
           }
           const done = entry && entry.completed_at;
-          const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '';
+          // Not done yet: for a date-type stage with a due_date set, show
+          // that ("Due ...") in the same slot the completion date would
+          // otherwise occupy — a target to work toward, replaced by the
+          // actual completion date once it's done.
+          const isDueLabel = !done && s.type === 'date' && entry && entry.due_date;
+          const dateLabel = done
+            ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' })
+            : isDueLabel
+              ? `Due ${new Date(entry.due_date).toLocaleDateString([], { day: '2-digit', month: 'short' })}`
+              : '';
+          const dateClass = isDueLabel ? 'stage-meta-date due' : 'stage-meta-date';
           // Not yet ticked: still show the configured default owner (so you
           // can see who's on the hook before the stage is done), but never a
           // date — it hasn't happened. Marked "default" (dimmed/italic) since
@@ -273,7 +283,7 @@ function renderTimeline() {
             <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>
             <div class="stage-meta">
               <div class="${ownerClass}">${ownerName ? escapeHtml(ownerName) : '&nbsp;'}</div>
-              <div class="stage-meta-date">${dateLabel ? escapeHtml(dateLabel) : '&nbsp;'}</div>
+              <div class="${dateClass}">${dateLabel ? escapeHtml(dateLabel) : '&nbsp;'}</div>
             </div>
           </td>`;
         })
@@ -648,6 +658,8 @@ function openStageModal(productId, stageKey) {
   document.getElementById('stage-na').checked = !!entry.not_applicable;
   document.getElementById('stage-completed').checked = !entry.not_applicable && !!entry.completed_at;
   document.getElementById('stage-date').value = entry.completed_at ? entry.completed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  document.getElementById('stage-due-date-row').style.display = stage.type === 'date' ? '' : 'none';
+  document.getElementById('stage-due-date').value = entry.due_date ? entry.due_date.slice(0, 10) : '';
   const ownerSelect = document.getElementById('stage-owner');
   ownerSelect.innerHTML = '<option value="">— unassigned —</option>' + state.teamMembers.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
   // If this specific product's stage has never had an owner set, pre-fill
@@ -681,13 +693,14 @@ async function saveStage() {
   const not_applicable = document.getElementById('stage-na').checked;
   const completed = !not_applicable && document.getElementById('stage-completed').checked;
   const date = document.getElementById('stage-date').value;
+  const due_date = document.getElementById('stage-due-date').value || null;
   const owner_id = document.getElementById('stage-owner').value || null;
   const note = document.getElementById('stage-note').value || null;
 
   try {
     const result = await api(`/products/${productId}/stages/${stageKey}`, {
       method: 'PATCH',
-      body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note, not_applicable }),
+      body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note, not_applicable, due_date }),
     });
     closeModal('stage-modal');
     toast(result.product_auto_archived ? '🎉 100% complete — archived automatically' : 'Stage updated');

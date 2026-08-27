@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS product_stages (
 -- whatever the category default says. Set via the Timeline's stage modal.
 ALTER TABLE product_stages ADD COLUMN IF NOT EXISTS not_applicable BOOLEAN;
 
+-- Target/planned date for date-type stages, independent of completed_at
+-- (the actual completion date) — set ahead of time via the stage modal so
+-- a milestone can show "due" info before it's actually done.
+ALTER TABLE product_stages ADD COLUMN IF NOT EXISTS due_date DATE;
+
 CREATE INDEX IF NOT EXISTS idx_product_stages_product_id ON product_stages(product_id);
 
 CREATE TABLE IF NOT EXISTS team_members (
@@ -161,5 +166,23 @@ BEGIN
         ('sheridan@kohindustries.com');
     END IF;
     INSERT INTO schema_seeds (seed_key) VALUES ('initial_email_recipients');
+  END IF;
+END $$;
+
+-- One-time application of the initial NP/NV/NC/ED N/A schedule. Applied
+-- once, ever (like the seeds above) — safe to re-deploy without
+-- clobbering any later manual changes made in Admin > Milestones. Any
+-- stage_key here that's since been deleted is a harmless no-op (WHERE
+-- IN matches zero rows).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schema_seeds WHERE seed_key = 'launch_type_na_defaults_v1') THEN
+    UPDATE stages SET na_default_nv = true, na_default_nc = true, na_default_ed = true
+      WHERE stage_key IN ('ref_sample_purchased', 'cad_drawing', 'sent_to_rach', 'specs_completed');
+    UPDATE stages SET na_default_nc = true, na_default_ed = true
+      WHERE stage_key IN ('first_sample_comments', 'second_sample_comments', 'third_sample_comments');
+    UPDATE stages SET na_default_ed = true
+      WHERE stage_key IN ('tech_pack_sent', 'approved_for_bulk');
+    INSERT INTO schema_seeds (seed_key) VALUES ('launch_type_na_defaults_v1');
   END IF;
 END $$;

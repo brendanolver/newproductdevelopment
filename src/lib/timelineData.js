@@ -44,6 +44,7 @@ async function getTimelineData({ archived = false } = {}) {
         owner_id: row ? row.owner_id : null,
         owner_name: row ? row.owner_name : null,
         not_applicable: resolveNotApplicable(s, p, row),
+        due_date: row ? row.due_date : null,
       };
     }
 
