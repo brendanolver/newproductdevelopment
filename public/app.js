@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], allProducts: [], teamMembers: [], stageDefaults: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
+let state = { stages: [], products: [], allProducts: [], teamMembers: [], stageDefaults: [], emailSchedule: null, selectedProductIds: new Set(), expandedProductIds: new Set() };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,18 +82,20 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, allProducts, syncStatus, teamMembers, stageDefaults] = await Promise.all([
+    const [timeline, allProducts, syncStatus, teamMembers, stageDefaults, emailSchedule] = await Promise.all([
       api('/timeline'),
       api('/products?archived=false'),
       api('/am/status'),
       api('/team-members'),
       api('/stage-defaults'),
+      api('/email/schedule'),
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
     state.allProducts = allProducts;
     state.teamMembers = teamMembers;
     state.stageDefaults = stageDefaults;
+    state.emailSchedule = emailSchedule;
     // Products still active drop out of selection automatically.
     const activeIds = new Set(state.products.map((p) => p.id));
     state.selectedProductIds = new Set([...state.selectedProductIds].filter((id) => activeIds.has(id)));
@@ -103,6 +105,7 @@ async function loadAll() {
     renderTeamMembersTable();
     renderStageDefaultsTable();
     renderSyncStatus(syncStatus);
+    renderEmailSchedule();
   } catch (e) {
     toast(e.message, true);
   }
@@ -144,6 +147,32 @@ async function sendWeeklyEmailNow() {
   try {
     const result = await api('/email/send-weekly', { method: 'POST' });
     toast(`Email sent: ${result.outstandingCount} outstanding (${result.atRiskCount} at risk)`);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function renderEmailSchedule() {
+  const schedule = state.emailSchedule;
+  if (!schedule) return;
+  document.getElementById('email-schedule-day').value = String(schedule.weekday);
+  document.getElementById('email-schedule-time').value = `${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')}`;
+  document.getElementById('email-schedule-current').textContent =
+    `Currently sends every ${WEEKDAY_NAMES[schedule.weekday]} at ${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')} AEST.`;
+}
+
+async function saveEmailSchedule() {
+  const weekday = Number(document.getElementById('email-schedule-day').value);
+  const time = document.getElementById('email-schedule-time').value;
+  if (!time) return toast('Pick a time', true);
+  const [hour, minute] = time.split(':').map(Number);
+
+  try {
+    state.emailSchedule = await api('/email/schedule', { method: 'PUT', body: JSON.stringify({ weekday, hour, minute }) });
+    renderEmailSchedule();
+    toast('Weekly email schedule updated');
   } catch (e) {
     toast(e.message, true);
   }

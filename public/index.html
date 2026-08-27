@@ -16,7 +16,6 @@
       <img class="logo-mark" src="wndrr-logo.png" alt="WNDRR">
       <div class="logo-text">OUT OF RANGE<span>PRODUCTS</span></div>
     </div>
-    <div class="pw-title">Out of Range Products</div>
     <div class="pw-sub">Enter your password to access the tracker</div>
     <input class="pw-input" type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')login()">
     <button class="pw-submit" onclick="login()">Access Tracker &rarr;</button>
@@ -45,7 +44,6 @@
 
   <main>
     <section id="tab-timeline" class="tab-panel active">
-      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div class="selection-bar">
         <span id="selection-count">0 selected</span>
         <button class="btn btn-ghost btn-sm" onclick="expandSelected()">Expand Selected</button>
@@ -56,12 +54,10 @@
     </section>
 
     <section id="tab-board" class="tab-panel">
-      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div id="board-container"></div>
     </section>
 
     <section id="tab-admin" class="tab-panel">
-      <h1 class="page-heading">OUT OF RANGE PRODUCTS</h1>
       <div class="admin-header">
         <h2>All Products</h2>
         <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ New Product</button>
@@ -95,7 +91,25 @@
         <h2>Weekly Email</h2>
         <button class="btn btn-ghost btn-sm" onclick="sendWeeklyEmailNow()">Send Now</button>
       </div>
-      <div class="admin-note">Outstanding styles (anything not fully checked off) are emailed automatically every Monday 8am AEST to brendan@kohindustries.com and sheridan@kohindustries.com. Use "Send Now" to test it.</div>
+      <div class="admin-note">Outstanding styles (anything not fully checked off) are emailed automatically to brendan@kohindustries.com and sheridan@kohindustries.com, on the schedule below. Use "Send Now" to test it.</div>
+      <div class="email-schedule-row">
+        <label>Day
+          <select id="email-schedule-day">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </label>
+        <label>Time (AEST)
+          <input type="time" id="email-schedule-time">
+        </label>
+        <button class="btn btn-primary btn-sm" onclick="saveEmailSchedule()">Save Schedule</button>
+      </div>
+      <div class="admin-note" id="email-schedule-current"></div>
     </section>
   </main>
 </div>

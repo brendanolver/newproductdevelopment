@@ -56,3 +56,16 @@ CREATE TABLE IF NOT EXISTS stage_default_owners (
   owner_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Single-row table (id always 1) holding when the weekly outstanding-styles
+-- email goes out, editable from Admin instead of being a code constant.
+-- weekday matches JS Date#getDay() (0 = Sunday .. 6 = Saturday). Time is
+-- interpreted in Australia/Sydney, same as the rest of the scheduler.
+CREATE TABLE IF NOT EXISTS weekly_email_schedule (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  weekday SMALLINT NOT NULL DEFAULT 1 CHECK (weekday BETWEEN 0 AND 6),
+  hour SMALLINT NOT NULL DEFAULT 8 CHECK (hour BETWEEN 0 AND 23),
+  minute SMALLINT NOT NULL DEFAULT 0 CHECK (minute BETWEEN 0 AND 59),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO weekly_email_schedule (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

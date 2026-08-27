@@ -38,7 +38,6 @@ body{font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:va
 #password-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy);}
 .pw-card{background:var(--surface);border-radius:var(--r-lg);padding:40px;width:340px;box-shadow:var(--shadow);}
 .pw-card .wndrr-logo{margin-bottom:24px;}
-.pw-title{font-size:20px;font-weight:700;margin-bottom:6px;}
 .pw-sub{color:var(--navy-text);font-size:12px;margin-bottom:20px;}
 .pw-input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font-family:inherit;font-size:13px;margin-bottom:12px;}
 .pw-submit{width:100%;background:var(--teal);color:white;border:none;padding:11px;border-radius:var(--r);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
@@ -67,7 +66,6 @@ body{font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:va
 main{padding:20px 24px;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
-.page-heading{font-size:18px;font-weight:700;letter-spacing:0.3px;margin-bottom:14px;}
 
 /* ── TIMELINE GRID ── */
 .selection-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text-secondary);}
@@ -145,6 +143,10 @@ main{padding:20px 24px;}
 .admin-table td{padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border);}
 .admin-table tr:last-child td{border-bottom:none;}
 .admin-table .link-btn{background:none;border:none;color:var(--teal);cursor:pointer;font-size:11px;font-weight:600;}
+
+.email-schedule-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.email-schedule-row label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;color:var(--text-secondary);}
+.email-schedule-row select,.email-schedule-row input{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);}
 
 /* ── MODAL ── */
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(17,24,39,0.45);align-items:center;justify-content:center;z-index:100;}
