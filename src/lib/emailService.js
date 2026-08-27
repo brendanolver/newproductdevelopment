@@ -43,15 +43,17 @@ function daysToLaunchLabel(days) {
 
 // One milestone cell — mirrors the Timeline grid: a checkmark for done
 // boolean stages, the completion date for done date-type stages, a dash
-// for not-yet-done.
+// for not-yet-done, and the owner's name underneath (when one is set).
 function stageCellHtml(stage, entry) {
   const done = entry && entry.completed_at;
-  if (!done) return `<span style="color:#cbd5e1;">–</span>`;
-  if (stage.type === 'date') {
-    const dateLabel = new Date(entry.completed_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
-    return `<span style="color:#16a34a;font-weight:700;">${dateLabel}</span>`;
-  }
-  return `<span style="color:#16a34a;font-weight:700;">&#10003;</span>`;
+  const topLine = !done
+    ? `<span style="color:#cbd5e1;">–</span>`
+    : stage.type === 'date'
+      ? `<span style="color:#16a34a;font-weight:700;">${new Date(entry.completed_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}</span>`
+      : `<span style="color:#16a34a;font-weight:700;">&#10003;</span>`;
+  const ownerName = entry && entry.owner_name;
+  const ownerLine = `<div style="font-size:9px;color:#94a3b8;margin-top:2px;">${ownerName ? esc(ownerName) : '&nbsp;'}</div>`;
+  return `${topLine}${ownerLine}`;
 }
 
 function buildHtml({ dateLabel, outstanding, atRiskCount, stages }) {
