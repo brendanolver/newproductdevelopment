@@ -305,7 +305,8 @@ function renderTimeline() {
         .map((s) => {
           const entry = p.stages[s.key];
           if (entry && entry.not_applicable) {
-            return `<td class="stage-cell na" data-product-id="${p.id}" data-stage-key="${s.key}">
+            return `<td class="stage-cell na" data-product-id="${p.id}" data-stage-key="${s.key}" title="Click: toggle done · Double-click: toggle N/A">
+              <button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>
               <span class="stage-pill na">N/A</span>
               <div class="stage-meta"><div class="stage-meta-owner">&nbsp;</div><div class="stage-meta-date">&nbsp;</div></div>
             </td>`;
@@ -329,7 +330,8 @@ function renderTimeline() {
           const defaultOwner = state.stageDefaults.find((d) => d.stage_key === s.key);
           const ownerName = done ? entry.owner_name || '—' : (defaultOwner && defaultOwner.owner_name) || '';
           const ownerClass = done ? 'stage-meta-owner' : 'stage-meta-owner default';
-          return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}">
+          return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}" title="Click: toggle done · Double-click: toggle N/A">
+            <button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>
             <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>
             <div class="stage-meta">
               <div class="${ownerClass}">${ownerName ? escapeHtml(ownerName) : '&nbsp;'}</div>
@@ -382,8 +384,22 @@ function renderTimeline() {
   `;
 
   container.querySelectorAll('.stage-cell').forEach((cell) => {
-    cell.addEventListener('click', () => {
-      openStageModal(Number(cell.dataset.productId), cell.dataset.stageKey);
+    const productId = Number(cell.dataset.productId);
+    const stageKey = cell.dataset.stageKey;
+    cell.addEventListener('click', (e) => {
+      if (e.target.closest('.stage-cell-edit')) return; // handled separately below
+      handleStageCellClick(productId, stageKey);
+    });
+    cell.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.stage-cell-edit')) return;
+      handleStageCellDblClick(productId, stageKey);
+    });
+  });
+
+  container.querySelectorAll('.stage-cell-edit').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openStageModal(Number(btn.dataset.productId), btn.dataset.stageKey);
     });
   });
 
@@ -760,6 +776,93 @@ async function deleteProduct() {
     await api(`/products/${id}`, { method: 'DELETE' });
     closeModal('product-modal');
     toast('Product deleted');
+    refreshTimeline();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Quick tick / N/A (click and double-click, no modal) ──
+// Click always toggles done, and clears N/A if it was set (matching the
+// modal's existing mutual-exclusivity rule). Double-click always toggles
+// N/A, clearing done if it was set. A browser fires click events before
+// dblclick even on a double-click, so a single click is held for a beat
+// to see whether a second one follows — if it does, this is actually a
+// double-click and the pending single-click action is cancelled.
+const stageCellClickTimers = new Map();
+const STAGE_CELL_DBLCLICK_WINDOW_MS = 280;
+
+function handleStageCellClick(productId, stageKey) {
+  const timerKey = `${productId}:${stageKey}`;
+  if (stageCellClickTimers.has(timerKey)) {
+    // Second click arrived inside the window — this is a double-click;
+    // the dblclick handler below does the actual work, so just cancel.
+    clearTimeout(stageCellClickTimers.get(timerKey));
+    stageCellClickTimers.delete(timerKey);
+    return;
+  }
+  const timer = setTimeout(() => {
+    stageCellClickTimers.delete(timerKey);
+    toggleStageDone(productId, stageKey);
+  }, STAGE_CELL_DBLCLICK_WINDOW_MS);
+  stageCellClickTimers.set(timerKey, timer);
+}
+
+function handleStageCellDblClick(productId, stageKey) {
+  const timerKey = `${productId}:${stageKey}`;
+  if (stageCellClickTimers.has(timerKey)) {
+    clearTimeout(stageCellClickTimers.get(timerKey));
+    stageCellClickTimers.delete(timerKey);
+  }
+  toggleStageNA(productId, stageKey);
+}
+
+async function toggleStageDone(productId, stageKey) {
+  const product = state.products.find((p) => p.id === productId);
+  if (!product) return;
+  const entry = product.stages[stageKey] || {};
+  const isCurrentlyDone = !!entry.completed_at && !entry.not_applicable;
+  const nowDone = !isCurrentlyDone;
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultOwner = state.stageDefaults.find((d) => d.stage_key === stageKey);
+  const owner_id = entry.owner_id || (nowDone ? (defaultOwner && defaultOwner.owner_id) || null : null);
+
+  try {
+    const result = await api(`/products/${productId}/stages/${stageKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        completed: nowDone,
+        date: nowDone ? today : null,
+        owner_id,
+        note: entry.note || null,
+        not_applicable: false,
+      }),
+    });
+    if (result.product_auto_archived) toast('🎉 100% complete — archived automatically');
+    refreshTimeline();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function toggleStageNA(productId, stageKey) {
+  const product = state.products.find((p) => p.id === productId);
+  if (!product) return;
+  const entry = product.stages[stageKey] || {};
+  const nowNA = !entry.not_applicable;
+
+  try {
+    const result = await api(`/products/${productId}/stages/${stageKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        completed: false,
+        date: null,
+        owner_id: entry.owner_id || null,
+        note: entry.note || null,
+        not_applicable: nowNA,
+      }),
+    });
+    if (result.product_auto_archived) toast('🎉 100% complete — archived automatically');
     refreshTimeline();
   } catch (e) {
     toast(e.message, true);
