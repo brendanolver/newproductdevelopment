@@ -226,6 +226,13 @@ function renderPercentComplete(pct) {
   return `<div class="percent-bar"><div class="percent-bar-fill" style="width:${pct}%"></div></div><div class="percent-text">${pct}%</div>`;
 }
 
+const LAUNCH_TYPE_LABELS = { NP: 'New Product', NV: 'New Version', NC: 'New Colourway', ED: 'Early Delivery' };
+
+function launchTypeBadge(launchType) {
+  if (!launchType) return '';
+  return `<span class="launch-type-badge" title="${escapeHtml(LAUNCH_TYPE_LABELS[launchType] || launchType)}">${escapeHtml(launchType)}</span>`;
+}
+
 function daysToLaunchLabel(days) {
   if (days === null || days === undefined) return '';
   if (days < 0) return `Launched ${Math.abs(days)}d ago`;
@@ -247,6 +254,12 @@ function renderTimeline() {
       const cells = state.stages
         .map((s) => {
           const entry = p.stages[s.key];
+          if (entry && entry.not_applicable) {
+            return `<td class="stage-cell na" data-product-id="${p.id}" data-stage-key="${s.key}">
+              <span class="stage-pill na">N/A</span>
+              <div class="stage-meta"><div class="stage-meta-owner">&nbsp;</div><div class="stage-meta-date">&nbsp;</div></div>
+            </td>`;
+          }
           const done = entry && entry.completed_at;
           const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '';
           // Not yet ticked: still show the configured default owner (so you
@@ -277,7 +290,7 @@ function renderTimeline() {
             <button class="order-toggle" data-product-id="${p.id}" aria-label="Show milestone and order details">▸</button>
             ${thumb}
             <div>
-              <div class="product-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
+              <div class="product-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span>${launchTypeBadge(p.launch_type)}</div>
               <div class="product-style">${escapeHtml(p.style_code)}</div>
               <div class="product-launch ${p.at_risk ? 'at-risk' : ''}">${p.launch_date ? new Date(p.launch_date).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : 'No launch date'} ${p.days_to_launch !== null ? '· ' + daysToLaunchLabel(p.days_to_launch) : ''}</div>
             </div>
@@ -450,10 +463,14 @@ function renderMilestonesTable(productId) {
 }
 
 // A product's "current stage" is the first stage (in sheet order) that
-// isn't done yet — the thing actually holding it up. null means every
-// stage is complete.
+// isn't done and isn't N/A — the thing actually holding it up. null means
+// every applicable stage is complete.
 function currentStageFor(product) {
-  return state.stages.find((s) => !(product.stages[s.key] && product.stages[s.key].completed_at)) || null;
+  return state.stages.find((s) => {
+    const entry = product.stages[s.key];
+    if (entry && entry.not_applicable) return false;
+    return !(entry && entry.completed_at);
+  }) || null;
 }
 
 function renderBoard() {
@@ -494,7 +511,7 @@ function renderBoardColumn(label, cards, isComplete) {
       return `<div class="board-card ${isComplete ? 'complete-card' : ''}" ${stage ? `data-product-id="${p.id}" data-stage-key="${stage.key}"` : ''}>
         ${thumb}
         <div class="board-card-body">
-          <div class="board-card-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
+          <div class="board-card-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span>${launchTypeBadge(p.launch_type)}</div>
           <div class="board-card-style">${escapeHtml(p.style_code)}</div>
           <div class="board-card-percent">${renderPercentComplete(p.percent_complete)}</div>
           <div class="board-card-launch ${p.at_risk ? 'at-risk' : ''}">${p.launch_date ? new Date(p.launch_date).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'No launch date'} ${p.days_to_launch !== null ? '· ' + daysToLaunchLabel(p.days_to_launch) : ''}</div>
@@ -512,7 +529,7 @@ function renderBoardColumn(label, cards, isComplete) {
 function renderProductsTable() {
   const tbody = document.querySelector('#products-table tbody');
   if (state.archivedProducts.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No archived products.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">No archived products.</td></tr>`;
   } else {
     tbody.innerHTML = state.archivedProducts
       .map(
@@ -522,6 +539,7 @@ function renderProductsTable() {
           <td>${escapeHtml(p.name)}</td>
           <td>${p.launch_date ? new Date(p.launch_date).toLocaleDateString() : '—'}</td>
           <td>${p.percent_complete}%</td>
+          <td>${p.launch_type ? `<span title="${escapeHtml(LAUNCH_TYPE_LABELS[p.launch_type] || p.launch_type)}">${escapeHtml(p.launch_type)}</span>` : '—'}</td>
           <td><span class="source-badge ${p.source}">${p.source}</span></td>
           <td>
             <button class="link-btn" data-action="edit" data-id="${p.id}">Edit</button>
@@ -572,6 +590,7 @@ function openProductModal(product) {
   document.getElementById('product-name').value = product ? product.name : '';
   document.getElementById('product-category').value = (product && product.category) || '';
   document.getElementById('product-launch-date').value = product && product.launch_date ? product.launch_date.slice(0, 10) : '';
+  document.getElementById('product-launch-type').value = (product && product.launch_type) || '';
   document.getElementById('product-image-url').value = (product && product.image_url) || '';
   document.getElementById('product-delete-btn').style.display = product ? 'inline-block' : 'none';
   openModal('product-modal');
@@ -584,6 +603,7 @@ async function saveProduct() {
     name: document.getElementById('product-name').value,
     category: document.getElementById('product-category').value || null,
     launch_date: document.getElementById('product-launch-date').value || null,
+    launch_type: document.getElementById('product-launch-type').value || null,
     image_url: document.getElementById('product-image-url').value || null,
   };
   if (!payload.name.trim()) return toast('Name is required', true);
@@ -625,7 +645,8 @@ function openStageModal(productId, stageKey) {
   activeCell = { productId, stageKey };
 
   document.getElementById('stage-modal-title').textContent = `${stage.label} — ${product.name}`;
-  document.getElementById('stage-completed').checked = !!entry.completed_at;
+  document.getElementById('stage-na').checked = !!entry.not_applicable;
+  document.getElementById('stage-completed').checked = !entry.not_applicable && !!entry.completed_at;
   document.getElementById('stage-date').value = entry.completed_at ? entry.completed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const ownerSelect = document.getElementById('stage-owner');
   ownerSelect.innerHTML = '<option value="">— unassigned —</option>' + state.teamMembers.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
@@ -635,13 +656,30 @@ function openStageModal(productId, stageKey) {
   const defaultOwner = state.stageDefaults.find((d) => d.stage_key === stageKey);
   ownerSelect.value = entry.owner_id || (defaultOwner && defaultOwner.owner_id) || '';
   document.getElementById('stage-note').value = entry.note || '';
+  syncStageModalNAVisibility();
   openModal('stage-modal');
 }
+
+// N/A and Done are mutually exclusive — checking one clears the other.
+function syncStageModalNAVisibility() {
+  const isNA = document.getElementById('stage-na').checked;
+  document.getElementById('stage-date-row').style.display = isNA ? 'none' : '';
+  document.getElementById('stage-completed').disabled = isNA;
+}
+document.getElementById('stage-na').addEventListener('change', () => {
+  if (document.getElementById('stage-na').checked) document.getElementById('stage-completed').checked = false;
+  syncStageModalNAVisibility();
+});
+document.getElementById('stage-completed').addEventListener('change', () => {
+  if (document.getElementById('stage-completed').checked) document.getElementById('stage-na').checked = false;
+  syncStageModalNAVisibility();
+});
 
 async function saveStage() {
   if (!activeCell) return;
   const { productId, stageKey } = activeCell;
-  const completed = document.getElementById('stage-completed').checked;
+  const not_applicable = document.getElementById('stage-na').checked;
+  const completed = !not_applicable && document.getElementById('stage-completed').checked;
   const date = document.getElementById('stage-date').value;
   const owner_id = document.getElementById('stage-owner').value || null;
   const note = document.getElementById('stage-note').value || null;
@@ -649,7 +687,7 @@ async function saveStage() {
   try {
     const result = await api(`/products/${productId}/stages/${stageKey}`, {
       method: 'PATCH',
-      body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note }),
+      body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note, not_applicable }),
     });
     closeModal('stage-modal');
     toast(result.product_auto_archived ? '🎉 100% complete — archived automatically' : 'Stage updated');
@@ -709,6 +747,14 @@ function renderStageDefinitionsTable() {
   container.innerHTML = list
     .map((s, i) => {
       const def = state.stageDefaults.find((d) => d.stage_key === s.stage_key);
+      const naToggles = ['NP', 'NV', 'NC', 'ED']
+        .map(
+          (cat) => `<label class="na-default-toggle" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])} — N/A by default">
+            <input type="checkbox" data-cat="${cat}" ${s['na_default_' + cat.toLowerCase()] ? 'checked' : ''}> ${cat}
+          </label>`
+        )
+        .join('');
+
       return `<div class="milestone-row" data-key="${s.stage_key}">
         <span class="drag-handle" draggable="true" title="Drag to reorder"></span>
         <span class="milestone-index">${i + 1}</span>
@@ -718,6 +764,7 @@ function renderStageDefinitionsTable() {
           <option value="">— unassigned —</option>
           ${state.teamMembers.map((m) => `<option value="${m.id}" ${def && def.owner_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
         </select>
+        <span class="milestone-na-defaults" title="Tick a category to make this milestone N/A by default for products of that launch type">${naToggles}</span>
         <button class="btn btn-ghost btn-sm" data-action="edit-milestone" data-key="${s.stage_key}">Edit</button>
       </div>`;
     })
@@ -731,7 +778,26 @@ function renderStageDefinitionsTable() {
     sel.addEventListener('change', () => saveMilestoneOwner(sel.dataset.stageKey, sel.value));
   });
 
+  container.querySelectorAll('.na-default-toggle input').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const stageKey = cb.closest('.milestone-row').dataset.key;
+      saveMilestoneNADefault(stageKey, cb.dataset.cat.toLowerCase(), cb.checked);
+    });
+  });
+
   setupMilestoneDragAndDrop(container);
+}
+
+async function saveMilestoneNADefault(stageKey, cat, value) {
+  try {
+    await api(`/stage-definitions/${stageKey}`, { method: 'PUT', body: JSON.stringify({ [`na_default_${cat}`]: value }) });
+    const stage = state.stageDefinitions.find((s) => s.stage_key === stageKey);
+    if (stage) stage[`na_default_${cat}`] = value;
+    toast('Milestone updated');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 function setupMilestoneDragAndDrop(container) {

@@ -15,7 +15,9 @@ function slugify(label) {
 // GET /api/stage-definitions — every milestone column, in display order.
 router.get('/', async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT stage_key, label, type, sort_order FROM stages ORDER BY sort_order ASC');
+    const result = await pool.query(
+      'SELECT stage_key, label, type, sort_order, na_default_np, na_default_nv, na_default_nc, na_default_ed FROM stages ORDER BY sort_order ASC'
+    );
     res.json(result.rows);
   } catch (err) {
     next(err);
@@ -73,7 +75,9 @@ router.put('/reorder', async (req, res, next) => {
       await client.query('UPDATE stages SET sort_order = $1 WHERE stage_key = $2', [i, order[i]]);
     }
     await client.query('COMMIT');
-    const result = await pool.query('SELECT stage_key, label, type, sort_order FROM stages ORDER BY sort_order ASC');
+    const result = await pool.query(
+      'SELECT stage_key, label, type, sort_order, na_default_np, na_default_nv, na_default_nc, na_default_ed FROM stages ORDER BY sort_order ASC'
+    );
     res.json(result.rows);
   } catch (err) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -83,16 +87,32 @@ router.put('/reorder', async (req, res, next) => {
   }
 });
 
-// PUT /api/stage-definitions/:stageKey  Body: { label?, type? }
+// PUT /api/stage-definitions/:stageKey
+// Body: { label?, type?, na_default_np?, na_default_nv?, na_default_nc?, na_default_ed? }
 router.put('/:stageKey', async (req, res, next) => {
   try {
-    const { label, type } = req.body || {};
+    const { label, type, na_default_np, na_default_nv, na_default_nc, na_default_ed } = req.body || {};
     if (type && type !== 'boolean' && type !== 'date') {
       return res.status(400).json({ error: "type must be 'boolean' or 'date'" });
     }
     const result = await pool.query(
-      `UPDATE stages SET label = COALESCE($1, label), type = COALESCE($2, type) WHERE stage_key = $3 RETURNING *`,
-      [label ? label.trim() : null, type || null, req.params.stageKey]
+      `UPDATE stages SET
+         label = COALESCE($1, label),
+         type = COALESCE($2, type),
+         na_default_np = COALESCE($3, na_default_np),
+         na_default_nv = COALESCE($4, na_default_nv),
+         na_default_nc = COALESCE($5, na_default_nc),
+         na_default_ed = COALESCE($6, na_default_ed)
+       WHERE stage_key = $7 RETURNING *`,
+      [
+        label ? label.trim() : null,
+        type || null,
+        typeof na_default_np === 'boolean' ? na_default_np : null,
+        typeof na_default_nv === 'boolean' ? na_default_nv : null,
+        typeof na_default_nc === 'boolean' ? na_default_nc : null,
+        typeof na_default_ed === 'boolean' ? na_default_ed : null,
+        req.params.stageKey,
+      ]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Milestone not found' });
     res.json(result.rows[0]);

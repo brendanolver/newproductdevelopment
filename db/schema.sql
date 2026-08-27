@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_archived ON products(archived);
 CREATE INDEX IF NOT EXISTS idx_products_launch_date ON products(launch_date);
 
+-- Which of the 4 launch categories this product is — drives which
+-- milestones are N/A by default for it (see stages.na_default_* below).
+-- Null means no category assigned, so nothing is N/A by default.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS launch_type VARCHAR(2) CHECK (launch_type IN ('NP', 'NV', 'NC', 'ED'));
+
 -- One row per (product, stage) that has ever been touched. Absence of a row
 -- means the stage is not done. completed_at doubles as the "date" value for
 -- date-type stages and as the completion flag for boolean-type stages.
@@ -34,6 +39,12 @@ CREATE TABLE IF NOT EXISTS product_stages (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (product_id, stage_key)
 );
+
+-- Tri-state per (product, stage): NULL = no explicit override, defer to
+-- the stage's category default for this product's launch_type; TRUE/FALSE
+-- = explicitly marked N/A or explicitly marked applicable, overriding
+-- whatever the category default says. Set via the Timeline's stage modal.
+ALTER TABLE product_stages ADD COLUMN IF NOT EXISTS not_applicable BOOLEAN;
 
 CREATE INDEX IF NOT EXISTS idx_product_stages_product_id ON product_stages(product_id);
 
@@ -83,6 +94,15 @@ CREATE TABLE IF NOT EXISTS stages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_stages_sort_order ON stages(sort_order);
+
+-- Per-category defaults (set in Admin > Milestones): whether this
+-- milestone doesn't apply to a product of that launch_type by default.
+-- A product's own product_stages.not_applicable, when explicitly set,
+-- always overrides these.
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS na_default_np BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS na_default_nv BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS na_default_nc BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE stages ADD COLUMN IF NOT EXISTS na_default_ed BOOLEAN NOT NULL DEFAULT false;
 
 -- Weekly email recipients, editable from Admin instead of a hardcoded
 -- constant / env var.

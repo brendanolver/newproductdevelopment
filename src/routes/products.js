@@ -2,8 +2,16 @@ const express = require('express');
 const { pool } = require('../db');
 const { fetchOpenOrdersForStyle } = require('../lib/amClient');
 const { getTimelineData } = require('../lib/timelineData');
+const { LAUNCH_TYPES } = require('../lib/stages');
 
 const router = express.Router();
+
+function validateLaunchType(launch_type) {
+  if (launch_type && !LAUNCH_TYPES.includes(launch_type)) {
+    return `launch_type must be one of: ${LAUNCH_TYPES.join(', ')}`;
+  }
+  return null;
+}
 
 // Shaped the same way as /api/timeline (stage map, percent_complete, etc.)
 // so Admin can show progress on archived products too.
@@ -21,14 +29,16 @@ router.get('/', async (req, res, next) => {
 // wait on the box_size sync gate.
 router.post('/', async (req, res, next) => {
   try {
-    const { style_code, name, category, launch_date, image_url } = req.body || {};
+    const { style_code, name, category, launch_date, image_url, launch_type } = req.body || {};
     if (!style_code || !style_code.trim()) return res.status(400).json({ error: 'style_code is required' });
     if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+    const launchTypeError = validateLaunchType(launch_type);
+    if (launchTypeError) return res.status(400).json({ error: launchTypeError });
 
     const result = await pool.query(
-      `INSERT INTO products (style_code, name, category, launch_date, image_url, source)
-       VALUES ($1, $2, $3, $4, $5, 'manual') RETURNING *`,
-      [style_code.trim(), name.trim(), category || null, launch_date || null, image_url || null]
+      `INSERT INTO products (style_code, name, category, launch_date, image_url, launch_type, source)
+       VALUES ($1, $2, $3, $4, $5, $6, 'manual') RETURNING *`,
+      [style_code.trim(), name.trim(), category || null, launch_date || null, image_url || null, launch_type || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -56,7 +66,10 @@ router.get('/:id/orders', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, category, launch_date, image_url, archived } = req.body || {};
+    const { name, category, launch_date, image_url, archived, launch_type } = req.body || {};
+    const launchTypeError = validateLaunchType(launch_type);
+    if (launchTypeError) return res.status(400).json({ error: launchTypeError });
+
     const result = await pool.query(
       `UPDATE products SET
          name = COALESCE($1, name),
@@ -64,14 +77,16 @@ router.put('/:id', async (req, res, next) => {
          launch_date = $3,
          image_url = $4,
          archived = COALESCE($5, archived),
+         launch_type = $6,
          updated_at = now()
-       WHERE id = $6 RETURNING *`,
+       WHERE id = $7 RETURNING *`,
       [
         name ? name.trim() : null,
         category || null,
         launch_date || null,
         image_url || null,
         typeof archived === 'boolean' ? archived : null,
+        launch_type || null,
         req.params.id,
       ]
     );
@@ -83,9 +98,12 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // POST /api/products/:id/unarchive — reopens an archived product by
-// un-archiving it AND reopening the most recently completed milestone
-// (whichever one was checked off last), so it goes back to "in progress"
-// one step before it hit 100%, rather than reappearing already fully done.
+// un-archiving it AND reopening whichever milestone was resolved most
+// recently (checked off done, or marked N/A), so it goes back to
+// "in progress" one step before it hit 100%, rather than reappearing
+// already fully done. Reopening clears both completed_at and the N/A
+// override, restoring that milestone to untouched (deferring to its
+// category default again, if any).
 router.post('/:id/unarchive', async (req, res, next) => {
   try {
     const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [req.params.id]);
@@ -93,7 +111,7 @@ router.post('/:id/unarchive', async (req, res, next) => {
 
     const lastStageResult = await pool.query(
       `SELECT stage_key FROM product_stages
-       WHERE product_id = $1 AND completed_at IS NOT NULL
+       WHERE product_id = $1 AND (completed_at IS NOT NULL OR not_applicable = true)
        ORDER BY updated_at DESC LIMIT 1`,
       [req.params.id]
     );
@@ -101,7 +119,7 @@ router.post('/:id/unarchive', async (req, res, next) => {
 
     if (reopenedStageKey) {
       await pool.query(
-        `UPDATE product_stages SET completed_at = NULL, updated_at = now()
+        `UPDATE product_stages SET completed_at = NULL, not_applicable = NULL, updated_at = now()
          WHERE product_id = $1 AND stage_key = $2`,
         [req.params.id, reopenedStageKey]
       );

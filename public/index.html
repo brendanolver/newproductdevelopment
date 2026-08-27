@@ -117,7 +117,7 @@
       </div>
       <div class="admin-note">Products archive automatically once every milestone is checked off. Unarchiving one reopens its most recently completed milestone, so it comes back as in-progress rather than already done.</div>
       <table class="admin-table" id="products-table">
-        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>% Complete</th><th>Source</th><th></th></tr></thead>
+        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>% Complete</th><th>Type</th><th>Source</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -149,6 +149,15 @@
           <input type="date" id="product-launch-date">
         </label>
       </div>
+      <label>Launch Type <span class="hint">(optional — drives which milestones are N/A by default)</span>
+        <select id="product-launch-type">
+          <option value="">— none —</option>
+          <option value="NP">New Product (NP)</option>
+          <option value="NV">New Version (NV)</option>
+          <option value="NC">New Colourway (NC)</option>
+          <option value="ED">Early Delivery (ED)</option>
+        </select>
+      </label>
       <label>Image URL <span class="hint">(optional)</span>
         <input type="text" id="product-image-url" placeholder="https://...">
       </label>
@@ -219,8 +228,14 @@
         <input type="checkbox" id="stage-completed">
         Done
       </label>
-      <label>Date
-        <input type="date" id="stage-date">
+      <div id="stage-date-row">
+        <label>Date
+          <input type="date" id="stage-date">
+        </label>
+      </div>
+      <label class="checkbox-label">
+        <input type="checkbox" id="stage-na">
+        Not Applicable (N/A)
       </label>
       <label>Owner <span class="hint">(optional)</span>
         <select id="stage-owner"><option value="">— unassigned —</option></select>
