@@ -15,7 +15,7 @@
 const { Resend } = require('resend');
 const { pool } = require('../db');
 const { getTimelineData } = require('./timelineData');
-const { currentStage } = require('./stages');
+const { currentStage, getStageDefaultOwners } = require('./stages');
 
 function percentColour(pct) {
   if (pct >= 100) return '#16a34a';
@@ -45,10 +45,11 @@ function daysToLaunchLabel(days) {
 // this milestone doesn't apply to this product; otherwise a tick (always,
 // regardless of boolean/date type) plus the owner's name plus the
 // completion date, all three whenever it's done. Not done yet shows a
-// dash, the owner if one's set, and — for a date-type stage with a
-// due_date — "Due ..." in place of the (blank) completion date, same as
-// the app.
-function stageCellHtml(stage, entry) {
+// dash, the configured default owner for this stage if one's set
+// (italicised — it's a prediction, not a confirmed owner, same as the
+// Timeline), and — for a date-type stage with a due_date — "Due ..." in
+// place of the (blank) completion date.
+function stageCellHtml(stage, entry, defaultOwnerName) {
   if (entry && entry.not_applicable) {
     return `<span style="color:#94a3b8;">N/A</span><div style="font-size:9px;color:#94a3b8;margin-top:2px;">&nbsp;</div><div style="font-size:9px;color:#94a3b8;">&nbsp;</div>`;
   }
@@ -56,21 +57,40 @@ function stageCellHtml(stage, entry) {
   const tickLine = done
     ? `<span style="color:#16a34a;font-weight:700;">&#10003;</span>`
     : `<span style="color:#cbd5e1;">–</span>`;
-  const ownerName = entry && entry.owner_name;
-  const ownerLine = `<div style="font-size:9px;color:#94a3b8;margin-top:2px;">${ownerName ? esc(ownerName) : '&nbsp;'}</div>`;
+  const ownerText = done ? (entry && entry.owner_name) || '—' : defaultOwnerName || '';
+  const ownerStyle = done ? 'color:#94a3b8;' : 'color:#cbd5e1;font-style:italic;';
+  const ownerLine = `<div style="font-size:9px;${ownerStyle}margin-top:2px;">${ownerText ? esc(ownerText) : '&nbsp;'}</div>`;
   const isDueLabel = !done && stage.type === 'date' && entry && entry.due_date;
   const dateLabel = done
     ? new Date(entry.completed_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })
     : isDueLabel
       ? `Due ${new Date(entry.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}`
       : '';
-  const dateColour = done ? '#94a3b8' : isDueLabel ? '#d97706' : '#94a3b8';
+  const dateColour = isDueLabel ? '#d97706' : '#94a3b8';
   const dateWeight = isDueLabel ? '700' : '400';
   const dateLine = `<div style="font-size:9px;color:${dateColour};font-weight:${dateWeight};">${dateLabel ? esc(dateLabel) : '&nbsp;'}</div>`;
   return `${tickLine}${ownerLine}${dateLine}`;
 }
 
-function buildHtml({ dateLabel, outstanding, atRiskCount, stages }) {
+// Product thumbnail + name/style, side by side via a nested table (not
+// flexbox) for compatibility with email clients that ignore it.
+function productCellHtml(p) {
+  const thumb = p.image_url
+    ? `<img src="${esc(p.image_url)}" width="56" height="34" alt="" style="width:56px;height:34px;object-fit:contain;border-radius:6px;background:#f8fafc;border:1px solid #e2e8f0;display:block;">`
+    : `<div style="width:56px;height:34px;border-radius:6px;background:#f8fafc;border:1px solid #e2e8f0;"></div>`;
+  return `
+    <table cellpadding="0" cellspacing="0" role="presentation"><tr>
+      <td style="padding-right:8px;">${thumb}</td>
+      <td>
+        <div style="font-weight:600;color:#0f172a;">${esc(p.name)}</div>
+        <div style="font-size:11px;color:#94a3b8;">${esc(p.style_code)}</div>
+      </td>
+    </tr></table>`;
+}
+
+function buildHtml({ dateLabel, outstanding, atRiskCount, stages, stageDefaultOwners }) {
+  const defaultOwnerByStage = new Map((stageDefaultOwners || []).map((d) => [d.stage_key, d.owner_name]));
+
   const kpiCard = (label, value, colour = '#0f172a') => `
     <td style="padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;text-align:center;">
       <div style="font-size:24px;font-weight:700;color:${colour};">${value}</div>
@@ -85,14 +105,11 @@ function buildHtml({ dateLabel, outstanding, atRiskCount, stages }) {
     ? `<tr><td colspan="${4 + stages.length}" style="padding:16px;text-align:center;color:#94a3b8;font-size:13px;">Nothing outstanding — every active style is fully checked off.</td></tr>`
     : outstanding.map((p) => {
         const milestoneCells = stages
-          .map((s) => `<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:center;white-space:nowrap;">${stageCellHtml(s, p.stages[s.key])}</td>`)
+          .map((s) => `<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:center;white-space:nowrap;">${stageCellHtml(s, p.stages[s.key], defaultOwnerByStage.get(s.key))}</td>`)
           .join('');
         return `
       <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
-          <div style="font-weight:600;color:#0f172a;">${esc(p.name)}</div>
-          <div style="font-size:11px;color:#94a3b8;">${esc(p.style_code)}</div>
-        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">${productCellHtml(p)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${percentColour(p.percent_complete)};white-space:nowrap;">${p.percent_complete}%</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;white-space:nowrap;">${p.launch_date ? new Date(p.launch_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;color:${p.at_risk ? '#dc2626' : '#475569'};font-weight:${p.at_risk ? '700' : '400'};white-space:nowrap;">${daysToLaunchLabel(p.days_to_launch)}</td>
@@ -157,6 +174,7 @@ async function sendWeeklyOutstandingEmail() {
   if (to.length === 0) throw new Error('No recipients configured — add one in Admin > Weekly Email.');
 
   const { stages, products } = await getTimelineData();
+  const stageDefaultOwners = await getStageDefaultOwners();
   // A product is "outstanding" if it's not yet fully complete. In practice
   // every active product qualifies now that 100% triggers auto-archiving,
   // but this stays as a defensive filter (e.g. a product with zero stages).
@@ -167,7 +185,7 @@ async function sendWeeklyOutstandingEmail() {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Australia/Sydney',
   });
 
-  const html = buildHtml({ dateLabel, outstanding, atRiskCount, stages });
+  const html = buildHtml({ dateLabel, outstanding, atRiskCount, stages, stageDefaultOwners });
   const subject = `WNDRR Product Timeline — ${outstanding.length} Outstanding Style${outstanding.length === 1 ? '' : 's'} (${dateLabel})`;
 
   const resend = new Resend(apiKey);

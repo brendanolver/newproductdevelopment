@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../db');
-const { getStages, getStageKeys } = require('../lib/stages');
+const { getStages, getStageKeys, getStageDefaultOwners } = require('../lib/stages');
 
 const router = express.Router();
 
@@ -10,12 +10,8 @@ const router = express.Router();
 router.get('/', async (req, res, next) => {
   try {
     const stages = await getStages();
-    const result = await pool.query(
-      `SELECT sdo.stage_key, sdo.owner_id, tm.name AS owner_name
-       FROM stage_default_owners sdo
-       LEFT JOIN team_members tm ON tm.id = sdo.owner_id`
-    );
-    const byStage = new Map(result.rows.map((r) => [r.stage_key, r]));
+    const rows = await getStageDefaultOwners();
+    const byStage = new Map(rows.map((r) => [r.stage_key, r]));
     const shaped = stages.map((s) => {
       const row = byStage.get(s.key);
       return { stage_key: s.key, label: s.label, owner_id: row ? row.owner_id : null, owner_name: row ? row.owner_name : null };

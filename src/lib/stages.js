@@ -24,6 +24,18 @@ async function getStageKeys() {
   return (await getStages()).map((s) => s.key);
 }
 
+// Default owner per stage (set in Admin > Milestones) — shared by the
+// /api/stage-defaults route and the weekly email, which both need to show
+// who's on the hook for a stage that's never actually been touched yet.
+async function getStageDefaultOwners() {
+  const result = await pool.query(
+    `SELECT sdo.stage_key, sdo.owner_id, tm.name AS owner_name
+     FROM stage_default_owners sdo
+     LEFT JOIN team_members tm ON tm.id = sdo.owner_id`
+  );
+  return result.rows;
+}
+
 // Resolves whether `stage` is not-applicable for `product`: an explicit
 // per-product override (product_stages.not_applicable, when not null)
 // always wins; otherwise falls back to the stage's default for the
@@ -68,4 +80,4 @@ async function isProductFullyDone(productId) {
   });
 }
 
-module.exports = { getStages, getStageKeys, currentStage, resolveNotApplicable, isProductFullyDone, LAUNCH_TYPES };
+module.exports = { getStages, getStageKeys, getStageDefaultOwners, currentStage, resolveNotApplicable, isProductFullyDone, LAUNCH_TYPES };
