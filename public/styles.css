@@ -82,6 +82,8 @@ main{padding:20px 24px;}
 .timeline-grid th, .timeline-grid td{border-bottom:1px solid var(--border);padding:0;white-space:nowrap;}
 .timeline-grid thead th{background:var(--surface2);font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-secondary);font-weight:700;padding:10px 8px;text-align:center;vertical-align:bottom;position:sticky;top:0;z-index:3;}
 .timeline-grid thead th.col-product{text-align:left;left:0;z-index:4;min-width:300px;}
+.stage-header-clickable{cursor:pointer;}
+.stage-header-clickable:hover{background:var(--teal-light);color:var(--teal-dark);}
 .timeline-grid tbody td.col-product{position:sticky;left:0;background:var(--surface);z-index:1;border-right:1px solid var(--border);}
 .timeline-grid tbody tr:hover td.col-product{background:var(--surface2);}
 .timeline-grid tbody tr:nth-last-child(2) td{border-bottom:none;}

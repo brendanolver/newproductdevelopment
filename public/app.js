@@ -116,6 +116,31 @@ async function loadAll() {
   }
 }
 
+// Lighter-weight than loadAll() — only refetches/re-renders what a
+// stage/product-level change can actually affect (timeline + archived
+// products list), skipping team members, milestone definitions, and email
+// settings, which never change from these actions. Used after ticking a
+// milestone and similar hot-path actions so those feel fast instead of
+// refetching + re-rendering the entire app every time.
+async function refreshTimeline() {
+  try {
+    const [timeline, archivedProducts] = await Promise.all([
+      api('/timeline'),
+      api('/products?archived=true'),
+    ]);
+    state.stages = timeline.stages;
+    state.products = timeline.products;
+    state.archivedProducts = archivedProducts;
+    const activeIds = new Set(state.products.map((p) => p.id));
+    state.selectedProductIds = new Set([...state.selectedProductIds].filter((id) => activeIds.has(id)));
+    renderTimeline();
+    renderBoard();
+    renderProductsTable();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 function renderSyncStatus(status) {
   const el = document.getElementById('sync-status');
   if (!status || !status.at) {
@@ -138,7 +163,7 @@ async function syncNow() {
     const result = await api('/am/sync', { method: 'POST' });
     renderSyncStatus(result);
     toast(`Synced ${result.upserted} qualifying product(s) from Apparel Magic`);
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   } finally {
@@ -238,14 +263,14 @@ async function setProductLaunchType(productId, cat, checked) {
   const launch_type = checked ? cat : null;
   // A product only has one launch type — uncheck the other 3 boxes on this
   // row immediately so it doesn't flash multiple-checked while the request
-  // is in flight; loadAll() below re-renders with the authoritative value.
+  // is in flight; refreshTimeline() below re-renders with the authoritative value.
   document.querySelectorAll(`.launch-type-checkbox[data-product-id="${productId}"]`).forEach((box) => {
     if (box.dataset.cat !== cat) box.checked = false;
   });
   try {
     await api(`/products/${productId}`, { method: 'PUT', body: JSON.stringify({ launch_type }) });
     toast('Launch type updated');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -265,7 +290,11 @@ function renderTimeline() {
     return;
   }
 
-  const stageHeaders = state.stages.map((s) => `<th title="${escapeHtml(s.label)}">${escapeHtml(s.label)}</th>`).join('');
+  const stageHeaders = state.stages
+    .map(
+      (s) => `<th class="stage-header-clickable" data-stage-key="${s.key}" title="${escapeHtml(s.label)} — select products, then click to mark done for all of them">${escapeHtml(s.label)}</th>`
+    )
+    .join('');
   const launchTypeHeaders = LAUNCH_TYPE_CODES.map(
     (cat) => `<th class="col-launch-type" data-tooltip="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}">${cat}</th>`
   ).join('');
@@ -384,6 +413,10 @@ function renderTimeline() {
     });
   });
 
+  container.querySelectorAll('.stage-header-clickable').forEach((th) => {
+    th.addEventListener('click', () => bulkMarkStageDone(th.dataset.stageKey));
+  });
+
   attachFloatingTooltips(container);
 
   const selectAllCb = document.getElementById('select-all-rows');
@@ -418,6 +451,58 @@ function collapseSelected() {
 }
 function collapseAll() {
   state.products.forEach((p) => setDetailOpen(p.id, false));
+}
+
+// Bulk-tick: select products via the row checkboxes, then click a
+// milestone's column header to mark it done (today, default owner) for
+// all of them in one action — mirrors "select a range, fill down" from a
+// spreadsheet without building true drag-to-select cell ranges. Products
+// where that milestone is currently N/A are left untouched, not forced
+// applicable just because they were in the selection.
+async function bulkMarkStageDone(stageKey) {
+  const stage = state.stages.find((s) => s.key === stageKey);
+  if (!stage) return;
+
+  const selectedIds = [...state.selectedProductIds];
+  if (selectedIds.length === 0) {
+    toast('Select products first (checkboxes on the left), then click a milestone header to mark it done for all of them.', true);
+    return;
+  }
+
+  const applicableIds = selectedIds.filter((id) => {
+    const product = state.products.find((p) => p.id === id);
+    const entry = product && product.stages[stageKey];
+    return !(entry && entry.not_applicable);
+  });
+  const skipped = selectedIds.length - applicableIds.length;
+  if (applicableIds.length === 0) {
+    toast(`"${stage.label}" is N/A for all ${selectedIds.length} selected product(s) — nothing to mark.`, true);
+    return;
+  }
+  const skipNote = skipped > 0 ? ` (${skipped} skipped — marked N/A)` : '';
+  if (!confirm(`Mark "${stage.label}" done for ${applicableIds.length} selected product(s)?${skipNote}`)) return;
+
+  const defaultOwner = state.stageDefaults.find((d) => d.stage_key === stageKey);
+  const today = new Date().toISOString().slice(0, 10);
+
+  try {
+    await Promise.all(
+      applicableIds.map((id) => {
+        const product = state.products.find((p) => p.id === id);
+        const entry = product.stages[stageKey];
+        const owner_id = (entry && entry.owner_id) || (defaultOwner && defaultOwner.owner_id) || null;
+        const note = (entry && entry.note) || null;
+        return api(`/products/${id}/stages/${stageKey}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ completed: true, date: today, owner_id, note, not_applicable: false }),
+        });
+      })
+    );
+    toast(`Marked "${stage.label}" done for ${applicableIds.length} product(s)`);
+    refreshTimeline();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 function setDetailOpen(productId, open) {
@@ -611,7 +696,7 @@ async function unarchiveProduct(id) {
     const result = await api(`/products/${id}/unarchive`, { method: 'POST' });
     const stage = state.stageDefinitions.find((s) => s.stage_key === result.reopened_stage_key);
     toast(stage ? `Unarchived — "${stage.label}" reopened` : 'Unarchived');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -661,7 +746,7 @@ async function saveProduct() {
     }
     closeModal('product-modal');
     toast('Product saved');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -675,7 +760,7 @@ async function deleteProduct() {
     await api(`/products/${id}`, { method: 'DELETE' });
     closeModal('product-modal');
     toast('Product deleted');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -737,7 +822,7 @@ async function saveStage() {
     });
     closeModal('stage-modal');
     toast(result.product_auto_archived ? '🎉 100% complete — archived automatically' : 'Stage updated');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -840,7 +925,7 @@ async function saveMilestoneNADefault(stageKey, cat, value) {
     const stage = state.stageDefinitions.find((s) => s.stage_key === stageKey);
     if (stage) stage[`na_default_${cat}`] = value;
     toast('Milestone updated');
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
@@ -886,7 +971,7 @@ async function reorderMilestones(sourceKey, targetKey) {
   try {
     state.stageDefinitions = await api('/stage-definitions/reorder', { method: 'PUT', body: JSON.stringify({ order }) });
     renderStageDefinitionsTable();
-    loadAll();
+    refreshTimeline();
   } catch (e) {
     toast(e.message, true);
   }
