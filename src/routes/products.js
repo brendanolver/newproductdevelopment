@@ -66,27 +66,35 @@ router.get('/:id/orders', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, category, launch_date, image_url, archived, launch_type } = req.body || {};
-    const launchTypeError = validateLaunchType(launch_type);
+    const body = req.body || {};
+    const { name, archived } = body;
+    const launchTypeError = validateLaunchType(body.launch_type);
     if (launchTypeError) return res.status(400).json({ error: launchTypeError });
+
+    // category/launch_date/image_url/launch_type are nullable+clearable —
+    // the product modal always sends every field (null clears it), but the
+    // Timeline's launch-type checkboxes only send { launch_type }. A field
+    // that's genuinely absent from the body must leave the existing value
+    // alone rather than being wiped to null.
+    const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
 
     const result = await pool.query(
       `UPDATE products SET
          name = COALESCE($1, name),
-         category = $2,
-         launch_date = $3,
-         image_url = $4,
-         archived = COALESCE($5, archived),
-         launch_type = $6,
+         category = CASE WHEN $2 THEN $3 ELSE category END,
+         launch_date = CASE WHEN $4 THEN $5::date ELSE launch_date END,
+         image_url = CASE WHEN $6 THEN $7 ELSE image_url END,
+         archived = COALESCE($8, archived),
+         launch_type = CASE WHEN $9 THEN $10 ELSE launch_type END,
          updated_at = now()
-       WHERE id = $7 RETURNING *`,
+       WHERE id = $11 RETURNING *`,
       [
         name ? name.trim() : null,
-        category || null,
-        launch_date || null,
-        image_url || null,
+        has('category'), body.category || null,
+        has('launch_date'), body.launch_date || null,
+        has('image_url'), body.image_url || null,
         typeof archived === 'boolean' ? archived : null,
-        launch_type || null,
+        has('launch_type'), body.launch_type || null,
         req.params.id,
       ]
     );

@@ -227,10 +227,28 @@ function renderPercentComplete(pct) {
 }
 
 const LAUNCH_TYPE_LABELS = { NP: 'New Product', NV: 'New Version', NC: 'New Colourway', ED: 'Early Delivery' };
+const LAUNCH_TYPE_CODES = ['NP', 'NV', 'NC', 'ED'];
 
 function launchTypeBadge(launchType) {
   if (!launchType) return '';
   return `<span class="launch-type-badge" title="${escapeHtml(LAUNCH_TYPE_LABELS[launchType] || launchType)}">${escapeHtml(launchType)}</span>`;
+}
+
+async function setProductLaunchType(productId, cat, checked) {
+  const launch_type = checked ? cat : null;
+  // A product only has one launch type — uncheck the other 3 boxes on this
+  // row immediately so it doesn't flash multiple-checked while the request
+  // is in flight; loadAll() below re-renders with the authoritative value.
+  document.querySelectorAll(`.launch-type-checkbox[data-product-id="${productId}"]`).forEach((box) => {
+    if (box.dataset.cat !== cat) box.checked = false;
+  });
+  try {
+    await api(`/products/${productId}`, { method: 'PUT', body: JSON.stringify({ launch_type }) });
+    toast('Launch type updated');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 function daysToLaunchLabel(days) {
@@ -248,6 +266,9 @@ function renderTimeline() {
   }
 
   const stageHeaders = state.stages.map((s) => `<th title="${escapeHtml(s.label)}">${escapeHtml(s.label)}</th>`).join('');
+  const launchTypeHeaders = LAUNCH_TYPE_CODES.map(
+    (cat) => `<th class="col-launch-type" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}">${cat}</th>`
+  ).join('');
 
   const rows = state.products
     .map((p) => {
@@ -307,10 +328,13 @@ function renderTimeline() {
           </div>
         </td>
         <td class="col-percent">${renderPercentComplete(p.percent_complete)}</td>
+        ${LAUNCH_TYPE_CODES.map(
+          (cat) => `<td class="col-launch-type"><input type="checkbox" class="launch-type-checkbox" data-product-id="${p.id}" data-cat="${cat}" ${p.launch_type === cat ? 'checked' : ''}></td>`
+        ).join('')}
         ${cells}
       </tr>
       <tr class="order-detail-row" data-product-id="${p.id}" style="display:none;">
-        <td class="order-detail-cell" colspan="${2 + state.stages.length}">
+        <td class="order-detail-cell" colspan="${2 + LAUNCH_TYPE_CODES.length + state.stages.length}">
           <div class="order-detail" id="order-detail-${p.id}"></div>
         </td>
       </tr>`;
@@ -322,7 +346,7 @@ function renderTimeline() {
   container.innerHTML = `
     <div class="timeline-scroll">
       <table class="timeline-grid">
-        <thead><tr><th class="col-product"><input type="checkbox" class="row-select" id="select-all-rows" ${allSelected ? 'checked' : ''}> Product</th><th class="col-percent">% Complete</th>${stageHeaders}</tr></thead>
+        <thead><tr><th class="col-product"><input type="checkbox" class="row-select" id="select-all-rows" ${allSelected ? 'checked' : ''}> Product</th><th class="col-percent">% Complete</th>${launchTypeHeaders}${stageHeaders}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -350,6 +374,13 @@ function renderTimeline() {
       if (cb.checked) state.selectedProductIds.add(productId);
       else state.selectedProductIds.delete(productId);
       updateSelectionBar();
+    });
+  });
+
+  container.querySelectorAll('.launch-type-checkbox').forEach((cb) => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      setProductLaunchType(Number(cb.dataset.productId), cb.dataset.cat, cb.checked);
     });
   });
 
