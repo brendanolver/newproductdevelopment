@@ -103,7 +103,6 @@ async function loadAll() {
     renderBoard();
     renderProductsTable();
     renderTeamMembersTable();
-    renderStageDefaultsTable();
     renderStageDefinitionsTable();
     renderSyncStatus(syncStatus);
     renderEmailSchedule();
@@ -651,44 +650,76 @@ async function saveTeamMember() {
   }
 }
 
-// ── Milestones (add/remove/reorder) ──────────────────
+// ── Milestones (drag to reorder, inline owner, add/edit/remove) ──
+let dragSourceKey = null;
+
 function renderStageDefinitionsTable() {
-  const tbody = document.querySelector('#milestones-table tbody');
+  const container = document.getElementById('milestones-list');
   const list = state.stageDefinitions;
-  tbody.innerHTML = list
-    .map(
-      (s, i) => `<tr>
-        <td>${escapeHtml(s.label)}</td>
-        <td>${s.type === 'date' ? 'Date' : 'Checkbox'}</td>
-        <td>
-          <button class="link-btn" data-action="move-up" data-key="${s.stage_key}" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
-          &nbsp;
-          <button class="link-btn" data-action="move-down" data-key="${s.stage_key}" ${i === list.length - 1 ? 'disabled' : ''}>&darr;</button>
-        </td>
-        <td><button class="link-btn" data-action="remove-milestone" data-key="${s.stage_key}">Remove</button></td>
-      </tr>`
-    )
+  container.innerHTML = list
+    .map((s, i) => {
+      const def = state.stageDefaults.find((d) => d.stage_key === s.stage_key);
+      return `<div class="milestone-row" data-key="${s.stage_key}">
+        <span class="drag-handle" draggable="true" title="Drag to reorder"></span>
+        <span class="milestone-index">${i + 1}</span>
+        <span class="milestone-name">${escapeHtml(s.label)}</span>
+        <span class="milestone-type-badge">${s.type === 'date' ? 'Date' : 'Checkbox'}</span>
+        <select class="milestone-owner-select" data-stage-key="${s.stage_key}">
+          <option value="">— unassigned —</option>
+          ${state.teamMembers.map((m) => `<option value="${m.id}" ${def && def.owner_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" data-action="edit-milestone" data-key="${s.stage_key}">Edit</button>
+      </div>`;
+    })
     .join('');
 
-  tbody.querySelectorAll('[data-action="move-up"]').forEach((btn) => {
-    btn.addEventListener('click', () => moveMilestone(btn.dataset.key, -1));
+  container.querySelectorAll('[data-action="edit-milestone"]').forEach((btn) => {
+    btn.addEventListener('click', () => openMilestoneModal(btn.dataset.key));
   });
-  tbody.querySelectorAll('[data-action="move-down"]').forEach((btn) => {
-    btn.addEventListener('click', () => moveMilestone(btn.dataset.key, 1));
+
+  container.querySelectorAll('.milestone-owner-select').forEach((sel) => {
+    sel.addEventListener('change', () => saveMilestoneOwner(sel.dataset.stageKey, sel.value));
   });
-  tbody.querySelectorAll('[data-action="remove-milestone"]').forEach((btn) => {
-    btn.addEventListener('click', () => removeMilestone(btn.dataset.key));
+
+  setupMilestoneDragAndDrop(container);
+}
+
+function setupMilestoneDragAndDrop(container) {
+  container.querySelectorAll('.drag-handle').forEach((handle) => {
+    handle.addEventListener('dragstart', (e) => {
+      dragSourceKey = handle.closest('.milestone-row').dataset.key;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    handle.addEventListener('dragend', () => {
+      dragSourceKey = null;
+      container.querySelectorAll('.milestone-row.drag-over').forEach((row) => row.classList.remove('drag-over'));
+    });
+  });
+
+  container.querySelectorAll('.milestone-row').forEach((row) => {
+    row.addEventListener('dragover', (e) => {
+      if (!dragSourceKey) return;
+      e.preventDefault();
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      const targetKey = row.dataset.key;
+      if (!dragSourceKey || dragSourceKey === targetKey) return;
+      reorderMilestones(dragSourceKey, targetKey);
+    });
   });
 }
 
-async function moveMilestone(stageKey, direction) {
-  const list = state.stageDefinitions;
-  const index = list.findIndex((s) => s.stage_key === stageKey);
-  const swapWith = index + direction;
-  if (index === -1 || swapWith < 0 || swapWith >= list.length) return;
-
-  const order = list.map((s) => s.stage_key);
-  [order[index], order[swapWith]] = [order[swapWith], order[index]];
+async function reorderMilestones(sourceKey, targetKey) {
+  const order = state.stageDefinitions.map((s) => s.stage_key);
+  const fromIndex = order.indexOf(sourceKey);
+  const toIndex = order.indexOf(targetKey);
+  if (fromIndex === -1 || toIndex === -1) return;
+  order.splice(fromIndex, 1);
+  order.splice(toIndex, 0, sourceKey);
 
   try {
     state.stageDefinitions = await api('/stage-definitions/reorder', { method: 'PUT', body: JSON.stringify({ order }) });
@@ -699,68 +730,60 @@ async function moveMilestone(stageKey, direction) {
   }
 }
 
-async function addMilestone() {
-  const labelInput = document.getElementById('milestone-new-label');
-  const typeSelect = document.getElementById('milestone-new-type');
-  const label = labelInput.value;
+async function saveMilestoneOwner(stageKey, ownerId) {
+  try {
+    await api(`/stage-defaults/${stageKey}`, { method: 'PUT', body: JSON.stringify({ owner_id: ownerId || null }) });
+    const d = state.stageDefaults.find((x) => x.stage_key === stageKey);
+    if (d) d.owner_id = ownerId ? Number(ownerId) : null;
+    toast('Default owner updated');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function openMilestoneModal(stageKey) {
+  const stage = stageKey ? state.stageDefinitions.find((s) => s.stage_key === stageKey) : null;
+  document.getElementById('milestone-modal-title').textContent = stage ? 'Edit Milestone' : 'New Milestone';
+  document.getElementById('milestone-key').value = stageKey || '';
+  document.getElementById('milestone-label').value = stage ? stage.label : '';
+  document.getElementById('milestone-type').value = stage ? stage.type : 'boolean';
+  document.getElementById('milestone-delete-btn').style.display = stage ? 'inline-block' : 'none';
+  openModal('milestone-modal');
+}
+
+async function saveMilestone() {
+  const stageKey = document.getElementById('milestone-key').value;
+  const label = document.getElementById('milestone-label').value;
+  const type = document.getElementById('milestone-type').value;
   if (!label.trim()) return toast('Milestone name is required', true);
 
   try {
-    await api('/stage-definitions', { method: 'POST', body: JSON.stringify({ label, type: typeSelect.value }) });
-    labelInput.value = '';
-    typeSelect.value = 'boolean';
-    toast('Milestone added');
+    if (stageKey) {
+      await api(`/stage-definitions/${stageKey}`, { method: 'PUT', body: JSON.stringify({ label, type }) });
+    } else {
+      await api('/stage-definitions', { method: 'POST', body: JSON.stringify({ label, type }) });
+    }
+    closeModal('milestone-modal');
+    toast('Milestone saved');
     loadAll();
   } catch (e) {
     toast(e.message, true);
   }
 }
 
-async function removeMilestone(stageKey) {
+async function deleteMilestoneFromModal() {
+  const stageKey = document.getElementById('milestone-key').value;
+  if (!stageKey) return;
   const stage = state.stageDefinitions.find((s) => s.stage_key === stageKey);
-  const label = stage ? stage.label : 'this milestone';
-  if (!confirm(`Remove "${label}"? Any progress logged against it for every product will be permanently deleted.`)) return;
+  if (!confirm(`Remove "${stage ? stage.label : 'this milestone'}"? Any progress logged against it for every product will be permanently deleted.`)) return;
   try {
     await api(`/stage-definitions/${stageKey}`, { method: 'DELETE' });
+    closeModal('milestone-modal');
     toast('Milestone removed');
     loadAll();
   } catch (e) {
     toast(e.message, true);
   }
-}
-
-// ── Milestone default owners ─────────────────────────
-function renderStageDefaultsTable() {
-  const tbody = document.querySelector('#stage-defaults-table tbody');
-  tbody.innerHTML = state.stageDefaults
-    .map(
-      (d) => `<tr>
-        <td>${escapeHtml(d.label)}</td>
-        <td>
-          <select data-stage-key="${d.stage_key}" class="stage-default-select">
-            <option value="">— unassigned —</option>
-            ${state.teamMembers.map((m) => `<option value="${m.id}" ${d.owner_id === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
-          </select>
-        </td>
-      </tr>`
-    )
-    .join('');
-
-  tbody.querySelectorAll('.stage-default-select').forEach((sel) => {
-    sel.addEventListener('change', async () => {
-      try {
-        await api(`/stage-defaults/${sel.dataset.stageKey}`, {
-          method: 'PUT',
-          body: JSON.stringify({ owner_id: sel.value || null }),
-        });
-        toast('Default owner updated');
-        const d = state.stageDefaults.find((x) => x.stage_key === sel.dataset.stageKey);
-        if (d) d.owner_id = sel.value ? Number(sel.value) : null;
-      } catch (e) {
-        toast(e.message, true);
-      }
-    });
-  });
 }
 
 function escapeHtml(str) {

@@ -80,33 +80,10 @@
 
       <div class="admin-header" style="margin-top:28px;">
         <h2>Milestones</h2>
+        <button class="btn btn-primary btn-sm" onclick="openMilestoneModal()">+ Add Milestone</button>
       </div>
-      <div class="admin-note">The timeline's columns, in order. Reorder with the arrows, or add/remove milestones below — changes apply to every product immediately. Removing a milestone permanently deletes any progress logged against it.</div>
-      <table class="admin-table" id="milestones-table">
-        <thead><tr><th>Milestone</th><th>Type</th><th>Order</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="milestone-add-row">
-        <label>New milestone
-          <input type="text" id="milestone-new-label" placeholder="e.g. Photography Approved">
-        </label>
-        <label>Type
-          <select id="milestone-new-type">
-            <option value="boolean">Checkbox</option>
-            <option value="date">Date</option>
-          </select>
-        </label>
-        <button class="btn btn-primary btn-sm" onclick="addMilestone()">+ Add Milestone</button>
-      </div>
-
-      <div class="admin-header" style="margin-top:28px;">
-        <h2>Milestone Default Owners</h2>
-      </div>
-      <div class="admin-note">Set a default owner per milestone so it's pre-filled when you mark that stage for a product — no need to pick it every time. Changing a default here doesn't affect stages already saved.</div>
-      <table class="admin-table" id="stage-defaults-table">
-        <thead><tr><th>Milestone</th><th>Default Owner</th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <div class="admin-note">The timeline's columns, in order. Drag the handle to reorder, pick a default owner inline, or Edit to rename/change type — changes apply to every product immediately. Removing a milestone permanently deletes any progress logged against it.</div>
+      <div id="milestones-list" class="milestones-list"></div>
 
       <div class="admin-header" style="margin-top:28px;">
         <h2>Weekly Email</h2>
@@ -168,6 +145,33 @@
       <button class="btn btn-danger" id="product-delete-btn" style="display:none;" onclick="deleteProduct()">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal('product-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveProduct()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Milestone modal (add/edit) -->
+<div id="milestone-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="milestone-modal-title">New Milestone</h3>
+      <button class="modal-close" onclick="closeModal('milestone-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="milestone-key">
+      <label>Name
+        <input type="text" id="milestone-label" placeholder="e.g. Photography Approved">
+      </label>
+      <label>Type
+        <select id="milestone-type">
+          <option value="boolean">Checkbox</option>
+          <option value="date">Date</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="milestone-delete-btn" style="display:none;" onclick="deleteMilestoneFromModal()">Remove</button>
+      <button class="btn btn-ghost" onclick="closeModal('milestone-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMilestone()">Save</button>
     </div>
   </div>
 </div>

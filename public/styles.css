@@ -155,10 +155,17 @@ main{padding:20px 24px;}
 .email-schedule-row label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;color:var(--text-secondary);}
 .email-schedule-row select,.email-schedule-row input{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);}
 
-.milestone-add-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px;}
-.milestone-add-row label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;color:var(--text-secondary);}
-.milestone-add-row select,.milestone-add-row input{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);}
-.milestone-add-row input{min-width:220px;}
+.milestones-list{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);overflow:hidden;}
+.milestone-row{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--border);}
+.milestone-row:last-child{border-bottom:none;}
+.milestone-row.drag-over{background:var(--teal-light);}
+.drag-handle{width:14px;height:20px;position:relative;cursor:grab;flex-shrink:0;}
+.drag-handle:active{cursor:grabbing;}
+.drag-handle::before{content:'';position:absolute;top:2px;left:2px;width:3px;height:3px;border-radius:50%;background:var(--text-muted);box-shadow:0 5px 0 var(--text-muted),0 10px 0 var(--text-muted),7px 0 0 var(--text-muted),7px 5px 0 var(--text-muted),7px 10px 0 var(--text-muted);}
+.milestone-index{color:var(--text-muted);font-size:11px;font-weight:700;width:16px;flex-shrink:0;}
+.milestone-name{font-weight:600;font-size:13px;flex:1;min-width:120px;}
+.milestone-type-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted);background:var(--surface2);padding:3px 8px;border-radius:var(--r-pill);flex-shrink:0;}
+.milestone-owner-select{font-family:inherit;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);min-width:150px;flex-shrink:0;}
 
 /* ── MODAL ── */
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(17,24,39,0.45);align-items:center;justify-content:center;z-index:100;}
