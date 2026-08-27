@@ -100,6 +100,11 @@ main{padding:20px 24px;}
 .col-percent{text-align:center;padding:6px 10px;min-width:80px;}
 .col-launch-type{text-align:center;padding:6px 4px;width:34px;}
 .col-launch-type input{margin:0;cursor:pointer;}
+/* Floating tooltip is positioned in JS and lives in document.body (see
+   showFloatingTooltip in app.js) rather than as a CSS ::after inside this
+   cell — .timeline-scroll needs overflow:auto for its sticky header, which
+   clips any tooltip that would render outside its scrollable box. */
+.floating-tooltip{position:fixed;transform:translate(-50%, -100%);margin-top:-6px;background:var(--text);color:#fff;padding:4px 8px;border-radius:var(--r);font-size:10px;font-weight:600;white-space:nowrap;z-index:1000;pointer-events:none;display:none;}
 .percent-bar{width:100%;max-width:70px;height:6px;background:var(--surface2);border-radius:var(--r-pill);overflow:hidden;margin:0 auto;}
 .percent-bar-fill{height:100%;background:var(--teal);border-radius:var(--r-pill);}
 .percent-text{font-size:10px;font-weight:700;color:var(--text-secondary);margin-top:3px;}

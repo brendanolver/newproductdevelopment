@@ -267,7 +267,7 @@ function renderTimeline() {
 
   const stageHeaders = state.stages.map((s) => `<th title="${escapeHtml(s.label)}">${escapeHtml(s.label)}</th>`).join('');
   const launchTypeHeaders = LAUNCH_TYPE_CODES.map(
-    (cat) => `<th class="col-launch-type" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}">${cat}</th>`
+    (cat) => `<th class="col-launch-type" data-tooltip="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}">${cat}</th>`
   ).join('');
 
   const rows = state.products
@@ -329,7 +329,7 @@ function renderTimeline() {
         </td>
         <td class="col-percent">${renderPercentComplete(p.percent_complete)}</td>
         ${LAUNCH_TYPE_CODES.map(
-          (cat) => `<td class="col-launch-type"><input type="checkbox" class="launch-type-checkbox" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}" data-product-id="${p.id}" data-cat="${cat}" ${p.launch_type === cat ? 'checked' : ''}></td>`
+          (cat) => `<td class="col-launch-type" data-tooltip="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}"><input type="checkbox" class="launch-type-checkbox" data-product-id="${p.id}" data-cat="${cat}" ${p.launch_type === cat ? 'checked' : ''}></td>`
         ).join('')}
         ${cells}
       </tr>
@@ -383,6 +383,8 @@ function renderTimeline() {
       setProductLaunchType(Number(cb.dataset.productId), cb.dataset.cat, cb.checked);
     });
   });
+
+  attachFloatingTooltips(container);
 
   const selectAllCb = document.getElementById('select-all-rows');
   if (selectAllCb) {
@@ -950,6 +952,34 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : str;
   return div.innerHTML;
+}
+
+// ── Floating tooltips ────────────────────────────────
+// JS-positioned + appended to document.body, not a CSS ::after inside the
+// element itself — needed for cells inside .timeline-scroll, which clips
+// anything rendered outside its own scrollable box (required so its
+// sticky header works). Attach to any element with a data-tooltip attr.
+let floatingTooltipEl = null;
+function showFloatingTooltip(target) {
+  if (!floatingTooltipEl) {
+    floatingTooltipEl = document.createElement('div');
+    floatingTooltipEl.className = 'floating-tooltip';
+    document.body.appendChild(floatingTooltipEl);
+  }
+  floatingTooltipEl.textContent = target.dataset.tooltip;
+  const rect = target.getBoundingClientRect();
+  floatingTooltipEl.style.left = `${rect.left + rect.width / 2}px`;
+  floatingTooltipEl.style.top = `${rect.top}px`;
+  floatingTooltipEl.style.display = 'block';
+}
+function hideFloatingTooltip() {
+  if (floatingTooltipEl) floatingTooltipEl.style.display = 'none';
+}
+function attachFloatingTooltips(container) {
+  container.querySelectorAll('[data-tooltip]').forEach((el) => {
+    el.addEventListener('mouseenter', () => showFloatingTooltip(el));
+    el.addEventListener('mouseleave', hideFloatingTooltip);
+  });
 }
 
 checkSession();
