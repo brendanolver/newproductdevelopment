@@ -171,12 +171,14 @@ function renderTimeline() {
         .map((s) => {
           const entry = p.stages[s.key];
           const done = entry && entry.completed_at;
-          const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '—';
-          const ownerBadge = entry && entry.owner_name
-            ? `<span class="stage-owner" title="${escapeHtml(entry.owner_name)}">${escapeHtml(initials(entry.owner_name))}</span>`
-            : '';
+          const dateLabel = done ? new Date(entry.completed_at).toLocaleDateString([], { day: '2-digit', month: 'short' }) : '';
+          const ownerLabel = done ? entry.owner_name || '—' : '';
           return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}">
-            <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? (s.type === 'date' ? dateLabel : '✓') : '—'}</span>${ownerBadge}
+            <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>
+            <div class="stage-meta">
+              <div class="stage-meta-owner">${ownerLabel ? escapeHtml(ownerLabel) : '&nbsp;'}</div>
+              <div class="stage-meta-date">${dateLabel ? escapeHtml(dateLabel) : '&nbsp;'}</div>
+            </div>
           </td>`;
         })
         .join('');
@@ -563,15 +565,6 @@ async function saveStage() {
   } catch (e) {
     toast(e.message, true);
   }
-}
-
-function initials(name) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('');
 }
 
 // ── Team members ─────────────────────────────────────
