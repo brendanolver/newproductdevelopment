@@ -16,6 +16,7 @@ const teamMemberRoutes = require('./routes/teamMembers');
 const emailRoutes = require('./routes/email');
 const stageDefaultRoutes = require('./routes/stageDefaults');
 const stageDefinitionRoutes = require('./routes/stageDefinitions');
+const emailRecipientRoutes = require('./routes/emailRecipients');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,7 @@ app.use('/api/team-members', requireAuth, teamMemberRoutes);
 app.use('/api/email', requireAuth, emailRoutes);
 app.use('/api/stage-defaults', requireAuth, stageDefaultRoutes);
 app.use('/api/stage-definitions', requireAuth, stageDefinitionRoutes);
+app.use('/api/email-recipients', requireAuth, emailRecipientRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

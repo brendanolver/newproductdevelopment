@@ -59,37 +59,29 @@
 
     <section id="tab-admin" class="tab-panel">
       <div class="admin-header">
-        <h2>All Products</h2>
-        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ New Product</button>
-      </div>
-      <div class="admin-note">AM-sourced products sync automatically (gated on Apparel Magic's Box Size field being set). Add anything else here manually.</div>
-      <table class="admin-table" id="products-table">
-        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>% Complete</th><th>Source</th><th>Archived</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-
-      <div class="admin-header" style="margin-top:28px;">
-        <h2>Team Members</h2>
-        <button class="btn btn-primary btn-sm" onclick="openTeamMemberModal()">+ Add Team Member</button>
-      </div>
-      <div class="admin-note">Team members can be assigned as the owner of any milestone stage.</div>
-      <table class="admin-table" id="team-members-table">
-        <thead><tr><th>Name</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-
-      <div class="admin-header" style="margin-top:28px;">
         <h2>Milestones</h2>
         <button class="btn btn-primary btn-sm" onclick="openMilestoneModal()">+ Add Milestone</button>
       </div>
-      <div class="admin-note">The timeline's columns, in order. Drag the handle to reorder, pick a default owner inline, or Edit to rename/change type — changes apply to every product immediately. Removing a milestone permanently deletes any progress logged against it.</div>
+      <div class="admin-note">The timeline's columns, in order. Drag the handle to reorder, pick a default owner inline, or Edit to rename/change type — changes apply to every product immediately. Removing a milestone permanently deletes any progress logged against it. A product is archived automatically once every milestone here is checked off.</div>
       <div id="milestones-list" class="milestones-list"></div>
 
       <div class="admin-header" style="margin-top:28px;">
         <h2>Weekly Email</h2>
         <button class="btn btn-ghost btn-sm" onclick="sendWeeklyEmailNow()">Send Now</button>
       </div>
-      <div class="admin-note">Outstanding styles (anything not fully checked off) are emailed automatically to brendan@kohindustries.com and sheridan@kohindustries.com, on the schedule below. Use "Send Now" to test it.</div>
+      <div class="admin-note">Outstanding styles (anything not fully checked off) are emailed automatically to the recipients below, on the schedule below. Use "Send Now" to test it.</div>
+
+      <div class="admin-subheader">Recipients</div>
+      <table class="admin-table" id="email-recipients-table">
+        <thead><tr><th>Email</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="inline-add-row">
+        <input type="email" id="email-recipient-new" placeholder="name@company.com">
+        <button class="btn btn-primary btn-sm" onclick="addEmailRecipient()">+ Add Recipient</button>
+      </div>
+
+      <div class="admin-subheader" style="margin-top:20px;">Schedule</div>
       <div class="email-schedule-row">
         <label>Day
           <select id="email-schedule-day">
@@ -108,6 +100,26 @@
         <button class="btn btn-primary btn-sm" onclick="saveEmailSchedule()">Save Schedule</button>
       </div>
       <div class="admin-note" id="email-schedule-current"></div>
+
+      <div class="admin-header" style="margin-top:28px;">
+        <h2>Team Members</h2>
+        <button class="btn btn-primary btn-sm" onclick="openTeamMemberModal()">+ Add Team Member</button>
+      </div>
+      <div class="admin-note">Team members can be assigned as the owner of any milestone stage.</div>
+      <table class="admin-table" id="team-members-table">
+        <thead><tr><th>Name</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="admin-header" style="margin-top:28px;">
+        <h2>All Products</h2>
+        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ New Product</button>
+      </div>
+      <div class="admin-note">AM-sourced products sync automatically (gated on Apparel Magic's Box Size field being set). Add anything else here manually.</div>
+      <table class="admin-table" id="products-table">
+        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>% Complete</th><th>Source</th><th>Archived</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
     </section>
   </main>
 </div>

@@ -4,14 +4,16 @@
  * Sends the weekly "outstanding styles" email via Resend — same provider
  * and pattern as WNDRR WMS's dailyEmailService.js.
  *
+ * Recipients are managed in Admin > Weekly Email (email_recipients table),
+ * not hardcoded or env-configured.
+ *
  * Required env vars:
  *   RESEND_API_KEY               — Resend API key
- *   PRODUCT_TIMELINE_EMAIL_TO    — comma-separated recipient list
- *                                  (default: brendan@kohindustries.com, sheridan@kohindustries.com)
  *   PRODUCT_TIMELINE_EMAIL_FROM  — verified sender (default: WNDRR Product Timeline <onboarding@resend.dev>)
  */
 
 const { Resend } = require('resend');
+const { pool } = require('../db');
 const { getTimelineData } = require('./timelineData');
 const { currentStage } = require('./stages');
 
@@ -21,8 +23,12 @@ function percentColour(pct) {
   return '#64748b';
 }
 
-const DEFAULT_TO = 'brendan@kohindustries.com,sheridan@kohindustries.com';
 const DEFAULT_FROM = 'WNDRR Product Timeline <onboarding@resend.dev>';
+
+async function getRecipientEmails() {
+  const result = await pool.query('SELECT email FROM email_recipients ORDER BY email ASC');
+  return result.rows.map((r) => r.email);
+}
 
 function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -50,11 +56,11 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
           <div style="font-weight:600;color:#0f172a;">${esc(p.name)}</div>
           <div style="font-size:11px;color:#94a3b8;">${esc(p.style_code)}</div>
         </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${percentColour(p.percent_complete)};">${p.percent_complete}%</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;">${p.launch_date ? new Date(p.launch_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;color:${p.at_risk ? '#dc2626' : '#475569'};font-weight:${p.at_risk ? '700' : '400'};">${daysToLaunchLabel(p.days_to_launch)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;">${esc(p.currentStageLabel)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;">${esc(p.currentStageOwner || '—')}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${percentColour(p.percent_complete)};">${p.percent_complete}%</td>
       </tr>`).join('');
 
   return `<!DOCTYPE html>
@@ -77,11 +83,11 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
         <thead>
           <tr style="background:#f8fafc;">
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Style</th>
+            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;">% Complete</th>
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Launch</th>
             <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;">Days</th>
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Current Stage</th>
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Owner</th>
-            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;">% Complete</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -98,12 +104,11 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
 
 async function sendWeeklyOutstandingEmail() {
   const apiKey = process.env.RESEND_API_KEY;
-  const toRaw = process.env.PRODUCT_TIMELINE_EMAIL_TO || DEFAULT_TO;
   const from = process.env.PRODUCT_TIMELINE_EMAIL_FROM || DEFAULT_FROM;
 
   if (!apiKey) throw new Error('RESEND_API_KEY is not set.');
-  const to = toRaw.split(',').map((s) => s.trim()).filter(Boolean);
-  if (to.length === 0) throw new Error('PRODUCT_TIMELINE_EMAIL_TO has no valid recipients.');
+  const to = await getRecipientEmails();
+  if (to.length === 0) throw new Error('No recipients configured — add one in Admin > Weekly Email.');
 
   const { stages, products } = await getTimelineData();
   const outstanding = products

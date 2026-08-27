@@ -101,3 +101,16 @@ INSERT INTO stages (stage_key, label, type, sort_order) VALUES
   ('stylised_flat_lay_images', 'Stylised Flat Lay Images', 'boolean', 13),
   ('ecomm_images', 'E-Comm Images', 'boolean', 14)
 ON CONFLICT (stage_key) DO NOTHING;
+
+-- Weekly email recipients, editable from Admin instead of a hardcoded
+-- constant / env var. Seeded with the previous hardcoded addresses so
+-- upgrading doesn't silently stop emailing anyone.
+CREATE TABLE IF NOT EXISTS email_recipients (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO email_recipients (email) VALUES
+  ('brendan@kohindustries.com'),
+  ('sheridan@kohindustries.com')
+ON CONFLICT (email) DO NOTHING;

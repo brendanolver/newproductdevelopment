@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, selectedProductIds: new Set(), expandedProductIds: new Set() };
+let state = { stages: [], products: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, emailRecipients: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,13 +82,14 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, stageDefinitions, syncStatus, teamMembers, stageDefaults, emailSchedule] = await Promise.all([
+    const [timeline, stageDefinitions, syncStatus, teamMembers, stageDefaults, emailSchedule, emailRecipients] = await Promise.all([
       api('/timeline'),
       api('/stage-definitions'),
       api('/am/status'),
       api('/team-members'),
       api('/stage-defaults'),
       api('/email/schedule'),
+      api('/email-recipients'),
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
@@ -96,6 +97,7 @@ async function loadAll() {
     state.teamMembers = teamMembers;
     state.stageDefaults = stageDefaults;
     state.emailSchedule = emailSchedule;
+    state.emailRecipients = emailRecipients;
     // Products still active drop out of selection automatically.
     const activeIds = new Set(state.products.map((p) => p.id));
     state.selectedProductIds = new Set([...state.selectedProductIds].filter((id) => activeIds.has(id)));
@@ -106,6 +108,7 @@ async function loadAll() {
     renderStageDefinitionsTable();
     renderSyncStatus(syncStatus);
     renderEmailSchedule();
+    renderEmailRecipientsTable();
   } catch (e) {
     toast(e.message, true);
   }
@@ -143,7 +146,8 @@ async function syncNow() {
 }
 
 async function sendWeeklyEmailNow() {
-  if (!confirm('Send the weekly outstanding-styles email right now, to brendan@kohindustries.com and sheridan@kohindustries.com?')) return;
+  const recipients = state.emailRecipients.map((r) => r.email).join(', ') || '(no recipients configured)';
+  if (!confirm(`Send the weekly outstanding-styles email right now, to ${recipients}?`)) return;
   try {
     const result = await api('/email/send-weekly', { method: 'POST' });
     toast(`Email sent: ${result.outstandingCount} outstanding (${result.atRiskCount} at risk)`);
@@ -173,6 +177,44 @@ async function saveEmailSchedule() {
     state.emailSchedule = await api('/email/schedule', { method: 'PUT', body: JSON.stringify({ weekday, hour, minute }) });
     renderEmailSchedule();
     toast('Weekly email schedule updated');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+function renderEmailRecipientsTable() {
+  const tbody = document.querySelector('#email-recipients-table tbody');
+  tbody.innerHTML = state.emailRecipients
+    .map(
+      (r) => `<tr><td>${escapeHtml(r.email)}</td><td><button class="link-btn" data-action="remove-recipient" data-id="${r.id}">Remove</button></td></tr>`
+    )
+    .join('');
+
+  tbody.querySelectorAll('[data-action="remove-recipient"]').forEach((btn) => {
+    btn.addEventListener('click', () => removeEmailRecipient(btn.dataset.id));
+  });
+}
+
+async function addEmailRecipient() {
+  const input = document.getElementById('email-recipient-new');
+  const email = input.value;
+  if (!email.trim()) return toast('Email address is required', true);
+
+  try {
+    await api('/email-recipients', { method: 'POST', body: JSON.stringify({ email }) });
+    input.value = '';
+    toast('Recipient added');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function removeEmailRecipient(id) {
+  try {
+    await api(`/email-recipients/${id}`, { method: 'DELETE' });
+    toast('Recipient removed');
+    loadAll();
   } catch (e) {
     toast(e.message, true);
   }
@@ -597,12 +639,12 @@ async function saveStage() {
   const note = document.getElementById('stage-note').value || null;
 
   try {
-    await api(`/products/${productId}/stages/${stageKey}`, {
+    const result = await api(`/products/${productId}/stages/${stageKey}`, {
       method: 'PATCH',
       body: JSON.stringify({ completed, date: completed ? date : null, owner_id, note }),
     });
     closeModal('stage-modal');
-    toast('Stage updated');
+    toast(result.product_auto_archived ? '🎉 100% complete — archived automatically' : 'Stage updated');
     loadAll();
   } catch (e) {
     toast(e.message, true);

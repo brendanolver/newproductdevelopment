@@ -28,7 +28,27 @@ router.patch('/:stageKey', async (req, res, next) => {
        RETURNING *`,
       [id, stageKey, completedAt, note || null, owner_id || null, updated_by || null]
     );
-    res.json(result.rows[0]);
+
+    // Auto-archive once every current milestone is done — only fires the
+    // moment the last one is checked off (never un-archives on uncheck).
+    let autoArchived = false;
+    if (completedAt) {
+      const doneResult = await pool.query(
+        `SELECT stage_key FROM product_stages WHERE product_id = $1 AND completed_at IS NOT NULL`,
+        [id]
+      );
+      const doneKeys = new Set(doneResult.rows.map((r) => r.stage_key));
+      const allDone = stageKeys.every((k) => doneKeys.has(k));
+      if (allDone) {
+        const archiveResult = await pool.query(
+          `UPDATE products SET archived = true, updated_at = now() WHERE id = $1 AND archived = false`,
+          [id]
+        );
+        autoArchived = archiveResult.rowCount > 0;
+      }
+    }
+
+    res.json({ ...result.rows[0], product_auto_archived: autoArchived });
   } catch (err) {
     if (err.code === '23503') return res.status(404).json({ error: 'Product or team member not found' });
     next(err);

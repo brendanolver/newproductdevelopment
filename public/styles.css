@@ -145,6 +145,9 @@ main{padding:20px 24px;}
 .admin-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .admin-header h2{font-size:15px;}
 .admin-note{font-size:11px;color:var(--text-muted);margin-bottom:10px;}
+.admin-subheader{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-secondary);margin-bottom:6px;}
+.inline-add-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.inline-add-row input{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);min-width:240px;}
 .admin-table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-xs);}
 .admin-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-muted);padding:8px 10px;background:var(--surface2);border-bottom:1px solid var(--border);}
 .admin-table td{padding:8px 10px;font-size:12px;border-bottom:1px solid var(--border);}
