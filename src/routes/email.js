@@ -5,12 +5,16 @@ const { getEmailSchedule, updateEmailSchedule } = require('../lib/emailSchedule'
 const router = express.Router();
 
 // Manual trigger — lets you test the weekly email without waiting for Monday.
-router.post('/send-weekly', async (req, res, next) => {
+// Surfaces the real error message (missing API key, Resend rejection, no
+// recipients, etc.) instead of the generic 500 handler's "Internal server
+// error" — this endpoint exists specifically so failures are debuggable.
+router.post('/send-weekly', async (req, res) => {
   try {
     const result = await sendWeeklyOutstandingEmail();
     res.json(result);
   } catch (err) {
-    next(err);
+    console.error('send-weekly failed:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
