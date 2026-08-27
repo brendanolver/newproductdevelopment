@@ -329,7 +329,7 @@ function renderTimeline() {
         </td>
         <td class="col-percent">${renderPercentComplete(p.percent_complete)}</td>
         ${LAUNCH_TYPE_CODES.map(
-          (cat) => `<td class="col-launch-type" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}"><input type="checkbox" class="launch-type-checkbox" data-product-id="${p.id}" data-cat="${cat}" ${p.launch_type === cat ? 'checked' : ''}></td>`
+          (cat) => `<td class="col-launch-type"><input type="checkbox" class="launch-type-checkbox" title="${escapeHtml(LAUNCH_TYPE_LABELS[cat])}" data-product-id="${p.id}" data-cat="${cat}" ${p.launch_type === cat ? 'checked' : ''}></td>`
         ).join('')}
         ${cells}
       </tr>
