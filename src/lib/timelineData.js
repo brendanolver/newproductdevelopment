@@ -1,15 +1,17 @@
 const { pool } = require('../db');
-const { STAGES } = require('./stages');
+const { getStages } = require('./stages');
 
 // Shared by the /api/timeline route and the weekly email — every active
 // product with its full stage-completion map (owner + note included).
 async function getTimelineData() {
+  const stages = await getStages();
+
   const productsResult = await pool.query(
     `SELECT * FROM products WHERE archived = false ORDER BY launch_date NULLS LAST, style_code ASC`
   );
   const products = productsResult.rows;
   if (products.length === 0) {
-    return { stages: STAGES, products: [] };
+    return { stages, products: [] };
   }
 
   const ids = products.map((p) => p.id);
@@ -38,13 +40,21 @@ async function getTimelineData() {
     const daysToLaunch = p.launch_date
       ? Math.ceil((new Date(p.launch_date).getTime() - now) / (1000 * 60 * 60 * 24))
       : null;
-    const completedCount = STAGES.filter((s) => stageMap[s.key] && stageMap[s.key].completed_at).length;
+    const completedCount = stages.filter((s) => stageMap[s.key] && stageMap[s.key].completed_at).length;
+    const percentComplete = stages.length ? Math.round((completedCount / stages.length) * 100) : 0;
     // Flag: launch is close (or passed) but the checklist isn't done yet.
-    const atRisk = daysToLaunch !== null && daysToLaunch <= 14 && completedCount < STAGES.length;
-    return { ...p, days_to_launch: daysToLaunch, stages: stageMap, completed_count: completedCount, at_risk: atRisk };
+    const atRisk = daysToLaunch !== null && daysToLaunch <= 14 && completedCount < stages.length;
+    return {
+      ...p,
+      days_to_launch: daysToLaunch,
+      stages: stageMap,
+      completed_count: completedCount,
+      percent_complete: percentComplete,
+      at_risk: atRisk,
+    };
   });
 
-  return { stages: STAGES, products: shaped };
+  return { stages, products: shaped };
 }
 
 module.exports = { getTimelineData };

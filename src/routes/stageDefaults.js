@@ -1,21 +1,22 @@
 const express = require('express');
 const { pool } = require('../db');
-const { STAGES, STAGE_KEYS } = require('../lib/stages');
+const { getStages, getStageKeys } = require('../lib/stages');
 
 const router = express.Router();
 
 // GET /api/stage-defaults — every stage, with its configured default owner
-// (null if none set). Always returns all 15 stages, not just ones with a
-// row, so the Admin table has something to render for each.
+// (null if none set). Always returns every current stage, not just ones
+// with a row, so the Admin table has something to render for each.
 router.get('/', async (req, res, next) => {
   try {
+    const stages = await getStages();
     const result = await pool.query(
       `SELECT sdo.stage_key, sdo.owner_id, tm.name AS owner_name
        FROM stage_default_owners sdo
        LEFT JOIN team_members tm ON tm.id = sdo.owner_id`
     );
     const byStage = new Map(result.rows.map((r) => [r.stage_key, r]));
-    const shaped = STAGES.map((s) => {
+    const shaped = stages.map((s) => {
       const row = byStage.get(s.key);
       return { stage_key: s.key, label: s.label, owner_id: row ? row.owner_id : null, owner_name: row ? row.owner_name : null };
     });
@@ -29,8 +30,9 @@ router.get('/', async (req, res, next) => {
 router.put('/:stageKey', async (req, res, next) => {
   try {
     const { stageKey } = req.params;
-    if (!STAGE_KEYS.includes(stageKey)) {
-      return res.status(400).json({ error: `stageKey must be one of: ${STAGE_KEYS.join(', ')}` });
+    const stageKeys = await getStageKeys();
+    if (!stageKeys.includes(stageKey)) {
+      return res.status(400).json({ error: `stageKey must be one of: ${stageKeys.join(', ')}` });
     }
     const { owner_id } = req.body || {};
     const result = await pool.query(

@@ -1,6 +1,6 @@
 const express = require('express');
 const { pool } = require('../db');
-const { STAGE_KEYS } = require('../lib/stages');
+const { getStageKeys } = require('../lib/stages');
 
 const router = express.Router({ mergeParams: true });
 
@@ -11,8 +11,9 @@ const router = express.Router({ mergeParams: true });
 router.patch('/:stageKey', async (req, res, next) => {
   try {
     const { id, stageKey } = req.params;
-    if (!STAGE_KEYS.includes(stageKey)) {
-      return res.status(400).json({ error: `stageKey must be one of: ${STAGE_KEYS.join(', ')}` });
+    const stageKeys = await getStageKeys();
+    if (!stageKeys.includes(stageKey)) {
+      return res.status(400).json({ error: `stageKey must be one of: ${stageKeys.join(', ')}` });
     }
 
     const { completed, date, note, owner_id, updated_by } = req.body || {};

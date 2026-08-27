@@ -64,7 +64,7 @@
       </div>
       <div class="admin-note">AM-sourced products sync automatically (gated on Apparel Magic's Box Size field being set). Add anything else here manually.</div>
       <table class="admin-table" id="products-table">
-        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>Source</th><th>Archived</th><th></th></tr></thead>
+        <thead><tr><th>Style Code</th><th>Name</th><th>Launch Date</th><th>% Complete</th><th>Source</th><th>Archived</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
 
@@ -77,6 +77,27 @@
         <thead><tr><th>Name</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
+
+      <div class="admin-header" style="margin-top:28px;">
+        <h2>Milestones</h2>
+      </div>
+      <div class="admin-note">The timeline's columns, in order. Reorder with the arrows, or add/remove milestones below — changes apply to every product immediately. Removing a milestone permanently deletes any progress logged against it.</div>
+      <table class="admin-table" id="milestones-table">
+        <thead><tr><th>Milestone</th><th>Type</th><th>Order</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="milestone-add-row">
+        <label>New milestone
+          <input type="text" id="milestone-new-label" placeholder="e.g. Photography Approved">
+        </label>
+        <label>Type
+          <select id="milestone-new-type">
+            <option value="boolean">Checkbox</option>
+            <option value="date">Date</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-sm" onclick="addMilestone()">+ Add Milestone</button>
+      </div>
 
       <div class="admin-header" style="margin-top:28px;">
         <h2>Milestone Default Owners</h2>

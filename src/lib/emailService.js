@@ -15,6 +15,12 @@ const { Resend } = require('resend');
 const { getTimelineData } = require('./timelineData');
 const { currentStage } = require('./stages');
 
+function percentColour(pct) {
+  if (pct >= 100) return '#16a34a';
+  if (pct >= 50) return '#0f172a';
+  return '#64748b';
+}
+
 const DEFAULT_TO = 'brendan@kohindustries.com,sheridan@kohindustries.com';
 const DEFAULT_FROM = 'WNDRR Product Timeline <onboarding@resend.dev>';
 
@@ -37,7 +43,7 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
     </td>`;
 
   const rows = outstanding.length === 0
-    ? `<tr><td colspan="5" style="padding:16px;text-align:center;color:#94a3b8;font-size:13px;">Nothing outstanding — every active style is fully checked off.</td></tr>`
+    ? `<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;font-size:13px;">Nothing outstanding — every active style is fully checked off.</td></tr>`
     : outstanding.map((p) => `
       <tr>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;">
@@ -48,10 +54,11 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;color:${p.at_risk ? '#dc2626' : '#475569'};font-weight:${p.at_risk ? '700' : '400'};">${daysToLaunchLabel(p.days_to_launch)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;">${esc(p.currentStageLabel)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#475569;">${esc(p.currentStageOwner || '—')}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:${percentColour(p.percent_complete)};">${p.percent_complete}%</td>
       </tr>`).join('');
 
   return `<!DOCTYPE html>
-<html><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+<html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
   <div style="max-width:640px;margin:0 auto;padding:24px;">
     <div style="background:#0f172a;border-radius:12px 12px 0 0;padding:20px 24px;">
       <div style="color:#fff;font-size:18px;font-weight:700;">WNDRR Product Timeline — Weekly Outstanding Styles</div>
@@ -74,6 +81,7 @@ function buildHtml({ dateLabel, outstanding, atRiskCount }) {
             <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;">Days</th>
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Current Stage</th>
             <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;">Owner</th>
+            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;">% Complete</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -97,10 +105,10 @@ async function sendWeeklyOutstandingEmail() {
   const to = toRaw.split(',').map((s) => s.trim()).filter(Boolean);
   if (to.length === 0) throw new Error('PRODUCT_TIMELINE_EMAIL_TO has no valid recipients.');
 
-  const { products } = await getTimelineData();
+  const { stages, products } = await getTimelineData();
   const outstanding = products
     .map((p) => {
-      const stage = currentStage(p.stages);
+      const stage = currentStage(stages, p.stages);
       if (!stage) return null; // fully complete — not outstanding
       const ownerEntry = p.stages[stage.key];
       return { ...p, currentStageLabel: stage.label, currentStageOwner: ownerEntry && ownerEntry.owner_name };

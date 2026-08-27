@@ -69,3 +69,35 @@ CREATE TABLE IF NOT EXISTS weekly_email_schedule (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO weekly_email_schedule (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- The timeline's milestone columns, editable from Admin (add/remove/reorder)
+-- instead of a hardcoded list. sort_order controls display order; gaps are
+-- fine since reordering rewrites every row's value. Seeded once with the
+-- app's original 15 stages so existing product_stages rows (keyed by
+-- stage_key, no FK) keep matching after upgrade.
+CREATE TABLE IF NOT EXISTS stages (
+  stage_key VARCHAR(64) PRIMARY KEY,
+  label VARCHAR(255) NOT NULL,
+  type VARCHAR(10) NOT NULL DEFAULT 'boolean' CHECK (type IN ('boolean', 'date')),
+  sort_order INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stages_sort_order ON stages(sort_order);
+
+INSERT INTO stages (stage_key, label, type, sort_order) VALUES
+  ('shopify_synced', 'Shopify Synced', 'boolean', 0),
+  ('ref_sample_purchased', 'Ref Sample Purchased', 'boolean', 1),
+  ('cad_drawing', 'CAD Drawing', 'boolean', 2),
+  ('sent_to_rach', 'Sent to Rach', 'date', 3),
+  ('specs_completed', 'Specs Completed', 'boolean', 4),
+  ('tech_pack_sent', 'Tech Pack Sent', 'date', 5),
+  ('first_sample_comments', 'First Sample Comments', 'date', 6),
+  ('second_sample_comments', 'Second Sample Comments', 'date', 7),
+  ('third_sample_comments', 'Third Sample Comments', 'date', 8),
+  ('approved_for_bulk', 'Approved for Bulk', 'date', 9),
+  ('bulk_order_arrival', 'Bulk Order Arrival', 'date', 10),
+  ('shipping_sample_received', 'Shipping Sample Received', 'boolean', 11),
+  ('flat_lay_images', 'Flat Lay Images', 'boolean', 12),
+  ('stylised_flat_lay_images', 'Stylised Flat Lay Images', 'boolean', 13),
+  ('ecomm_images', 'E-Comm Images', 'boolean', 14)
+ON CONFLICT (stage_key) DO NOTHING;

@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], allProducts: [], teamMembers: [], stageDefaults: [], emailSchedule: null, selectedProductIds: new Set(), expandedProductIds: new Set() };
+let state = { stages: [], products: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, selectedProductIds: new Set(), expandedProductIds: new Set() };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,9 +82,9 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, allProducts, syncStatus, teamMembers, stageDefaults, emailSchedule] = await Promise.all([
+    const [timeline, stageDefinitions, syncStatus, teamMembers, stageDefaults, emailSchedule] = await Promise.all([
       api('/timeline'),
-      api('/products?archived=false'),
+      api('/stage-definitions'),
       api('/am/status'),
       api('/team-members'),
       api('/stage-defaults'),
@@ -92,7 +92,7 @@ async function loadAll() {
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
-    state.allProducts = allProducts;
+    state.stageDefinitions = stageDefinitions;
     state.teamMembers = teamMembers;
     state.stageDefaults = stageDefaults;
     state.emailSchedule = emailSchedule;
@@ -104,6 +104,7 @@ async function loadAll() {
     renderProductsTable();
     renderTeamMembersTable();
     renderStageDefaultsTable();
+    renderStageDefinitionsTable();
     renderSyncStatus(syncStatus);
     renderEmailSchedule();
   } catch (e) {
@@ -178,6 +179,10 @@ async function saveEmailSchedule() {
   }
 }
 
+function renderPercentComplete(pct) {
+  return `<div class="percent-bar"><div class="percent-bar-fill" style="width:${pct}%"></div></div><div class="percent-text">${pct}%</div>`;
+}
+
 function daysToLaunchLabel(days) {
   if (days === null || days === undefined) return '';
   if (days < 0) return `Launched ${Math.abs(days)}d ago`;
@@ -235,10 +240,11 @@ function renderTimeline() {
             </div>
           </div>
         </td>
+        <td class="col-percent">${renderPercentComplete(p.percent_complete)}</td>
         ${cells}
       </tr>
       <tr class="order-detail-row" data-product-id="${p.id}" style="display:none;">
-        <td class="order-detail-cell" colspan="${1 + state.stages.length}">
+        <td class="order-detail-cell" colspan="${2 + state.stages.length}">
           <div class="order-detail" id="order-detail-${p.id}"></div>
         </td>
       </tr>`;
@@ -250,7 +256,7 @@ function renderTimeline() {
   container.innerHTML = `
     <div class="timeline-scroll">
       <table class="timeline-grid">
-        <thead><tr><th class="col-product"><input type="checkbox" class="row-select" id="select-all-rows" ${allSelected ? 'checked' : ''}> Product</th>${stageHeaders}</tr></thead>
+        <thead><tr><th class="col-product"><input type="checkbox" class="row-select" id="select-all-rows" ${allSelected ? 'checked' : ''}> Product</th><th class="col-percent">% Complete</th>${stageHeaders}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -447,6 +453,7 @@ function renderBoardColumn(label, cards, isComplete) {
         <div class="board-card-body">
           <div class="board-card-name">${escapeHtml(p.name)}<span class="source-badge ${p.source}">${p.source}</span></div>
           <div class="board-card-style">${escapeHtml(p.style_code)}</div>
+          <div class="board-card-percent">${renderPercentComplete(p.percent_complete)}</div>
           <div class="board-card-launch ${p.at_risk ? 'at-risk' : ''}">${p.launch_date ? new Date(p.launch_date).toLocaleDateString([], { day: '2-digit', month: 'short' }) : 'No launch date'} ${p.days_to_launch !== null ? '· ' + daysToLaunchLabel(p.days_to_launch) : ''}</div>
         </div>
       </div>`;
@@ -461,13 +468,14 @@ function renderBoardColumn(label, cards, isComplete) {
 
 function renderProductsTable() {
   const tbody = document.querySelector('#products-table tbody');
-  tbody.innerHTML = state.allProducts
+  tbody.innerHTML = state.products
     .map(
       (p) => `
       <tr>
         <td>${escapeHtml(p.style_code)}</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${p.launch_date ? new Date(p.launch_date).toLocaleDateString() : '—'}</td>
+        <td>${p.percent_complete}%</td>
         <td><span class="source-badge ${p.source}">${p.source}</span></td>
         <td>${p.archived ? 'Yes' : 'No'}</td>
         <td>
@@ -481,7 +489,7 @@ function renderProductsTable() {
 
   tbody.querySelectorAll('[data-action="edit"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const product = state.allProducts.find((p) => p.id === Number(btn.dataset.id));
+      const product = state.products.find((p) => p.id === Number(btn.dataset.id));
       openProductModal(product);
     });
   });
@@ -637,6 +645,84 @@ async function saveTeamMember() {
     await api('/team-members', { method: 'POST', body: JSON.stringify({ name }) });
     closeModal('team-member-modal');
     toast('Team member added');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Milestones (add/remove/reorder) ──────────────────
+function renderStageDefinitionsTable() {
+  const tbody = document.querySelector('#milestones-table tbody');
+  const list = state.stageDefinitions;
+  tbody.innerHTML = list
+    .map(
+      (s, i) => `<tr>
+        <td>${escapeHtml(s.label)}</td>
+        <td>${s.type === 'date' ? 'Date' : 'Checkbox'}</td>
+        <td>
+          <button class="link-btn" data-action="move-up" data-key="${s.stage_key}" ${i === 0 ? 'disabled' : ''}>&uarr;</button>
+          &nbsp;
+          <button class="link-btn" data-action="move-down" data-key="${s.stage_key}" ${i === list.length - 1 ? 'disabled' : ''}>&darr;</button>
+        </td>
+        <td><button class="link-btn" data-action="remove-milestone" data-key="${s.stage_key}">Remove</button></td>
+      </tr>`
+    )
+    .join('');
+
+  tbody.querySelectorAll('[data-action="move-up"]').forEach((btn) => {
+    btn.addEventListener('click', () => moveMilestone(btn.dataset.key, -1));
+  });
+  tbody.querySelectorAll('[data-action="move-down"]').forEach((btn) => {
+    btn.addEventListener('click', () => moveMilestone(btn.dataset.key, 1));
+  });
+  tbody.querySelectorAll('[data-action="remove-milestone"]').forEach((btn) => {
+    btn.addEventListener('click', () => removeMilestone(btn.dataset.key));
+  });
+}
+
+async function moveMilestone(stageKey, direction) {
+  const list = state.stageDefinitions;
+  const index = list.findIndex((s) => s.stage_key === stageKey);
+  const swapWith = index + direction;
+  if (index === -1 || swapWith < 0 || swapWith >= list.length) return;
+
+  const order = list.map((s) => s.stage_key);
+  [order[index], order[swapWith]] = [order[swapWith], order[index]];
+
+  try {
+    state.stageDefinitions = await api('/stage-definitions/reorder', { method: 'PUT', body: JSON.stringify({ order }) });
+    renderStageDefinitionsTable();
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function addMilestone() {
+  const labelInput = document.getElementById('milestone-new-label');
+  const typeSelect = document.getElementById('milestone-new-type');
+  const label = labelInput.value;
+  if (!label.trim()) return toast('Milestone name is required', true);
+
+  try {
+    await api('/stage-definitions', { method: 'POST', body: JSON.stringify({ label, type: typeSelect.value }) });
+    labelInput.value = '';
+    typeSelect.value = 'boolean';
+    toast('Milestone added');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+async function removeMilestone(stageKey) {
+  const stage = state.stageDefinitions.find((s) => s.stage_key === stageKey);
+  const label = stage ? stage.label : 'this milestone';
+  if (!confirm(`Remove "${label}"? Any progress logged against it for every product will be permanently deleted.`)) return;
+  try {
+    await api(`/stage-definitions/${stageKey}`, { method: 'DELETE' });
+    toast('Milestone removed');
     loadAll();
   } catch (e) {
     toast(e.message, true);
