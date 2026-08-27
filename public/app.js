@@ -285,6 +285,15 @@ function daysToLaunchLabel(days) {
 
 function renderTimeline() {
   const container = document.getElementById('timeline-container');
+  // Every render below replaces .timeline-scroll's innerHTML wholesale,
+  // which creates a brand-new element — so its scroll position resets to
+  // (0,0) unless explicitly carried over. Since a stage-cell click/dblclick
+  // triggers a re-render on every single interaction, without this the
+  // view would visibly jump back to the top-left after every tick.
+  const previousScrollBox = container.querySelector('.timeline-scroll');
+  const savedScrollTop = previousScrollBox ? previousScrollBox.scrollTop : 0;
+  const savedScrollLeft = previousScrollBox ? previousScrollBox.scrollLeft : 0;
+
   if (state.products.length === 0) {
     container.innerHTML = `<div class="empty-state">No active products yet. Sync Apparel Magic, or add one manually with "+ New Product".</div>`;
     return;
@@ -305,8 +314,13 @@ function renderTimeline() {
         .map((s) => {
           const entry = p.stages[s.key];
           if (entry && entry.not_applicable) {
-            return `<td class="stage-cell na" data-product-id="${p.id}" data-stage-key="${s.key}" title="Click: toggle done · Double-click: toggle N/A">
-              <button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>
+            // Date-type stages always reopen the full modal on click (the
+            // popup lets you pick the actual date) — the quick tick/N/A
+            // toggles below are boolean-type only.
+            const naTitle = s.type === 'date' ? 'Click to edit' : 'Click: toggle done · Double-click: toggle N/A';
+            const naEditBtn = s.type === 'date' ? '' : `<button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>`;
+            return `<td class="stage-cell na" data-product-id="${p.id}" data-stage-key="${s.key}" data-stage-type="${s.type}" title="${naTitle}">
+              ${naEditBtn}
               <span class="stage-pill na">N/A</span>
               <div class="stage-meta"><div class="stage-meta-owner">&nbsp;</div><div class="stage-meta-date">&nbsp;</div></div>
             </td>`;
@@ -330,8 +344,10 @@ function renderTimeline() {
           const defaultOwner = state.stageDefaults.find((d) => d.stage_key === s.key);
           const ownerName = done ? entry.owner_name || '—' : (defaultOwner && defaultOwner.owner_name) || '';
           const ownerClass = done ? 'stage-meta-owner' : 'stage-meta-owner default';
-          return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}" title="Click: toggle done · Double-click: toggle N/A">
-            <button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>
+          const cellTitle = s.type === 'date' ? 'Click to edit' : 'Click: toggle done · Double-click: toggle N/A';
+          const cellEditBtn = s.type === 'date' ? '' : `<button class="stage-cell-edit" data-product-id="${p.id}" data-stage-key="${s.key}" title="Edit (set custom date, owner, or note)">&#8942;</button>`;
+          return `<td class="stage-cell" data-product-id="${p.id}" data-stage-key="${s.key}" data-stage-type="${s.type}" title="${cellTitle}">
+            ${cellEditBtn}
             <span class="stage-pill ${done ? 'done' : 'pending'}">${done ? '✓' : '—'}</span>
             <div class="stage-meta">
               <div class="${ownerClass}">${ownerName ? escapeHtml(ownerName) : '&nbsp;'}</div>
@@ -383,9 +399,25 @@ function renderTimeline() {
     </div>
   `;
 
+  const newScrollBox = container.querySelector('.timeline-scroll');
+  if (newScrollBox) {
+    newScrollBox.scrollTop = savedScrollTop;
+    newScrollBox.scrollLeft = savedScrollLeft;
+  }
+
   container.querySelectorAll('.stage-cell').forEach((cell) => {
     const productId = Number(cell.dataset.productId);
     const stageKey = cell.dataset.stageKey;
+    // Date-type stages keep the old popup-first behaviour (a click opens
+    // the full modal, so you can pick the actual date) — the quick
+    // click-to-tick / double-click-to-N/A shortcuts are boolean-only.
+    if (cell.dataset.stageType === 'date') {
+      cell.addEventListener('click', (e) => {
+        if (e.target.closest('.stage-cell-edit')) return;
+        openStageModal(productId, stageKey);
+      });
+      return;
+    }
     cell.addEventListener('click', (e) => {
       if (e.target.closest('.stage-cell-edit')) return; // handled separately below
       handleStageCellClick(productId, stageKey);
@@ -619,6 +651,11 @@ function currentStageFor(product) {
 
 function renderBoard() {
   const container = document.getElementById('board-container');
+  // Same scroll-position fix as renderTimeline() — .board scrolls
+  // horizontally and gets fully replaced on every render.
+  const previousBoard = container.querySelector('.board');
+  const savedScrollLeft = previousBoard ? previousBoard.scrollLeft : 0;
+
   if (state.products.length === 0) {
     container.innerHTML = `<div class="empty-state">No active products yet. Sync Apparel Magic, or add one manually with "+ New Product".</div>`;
     return;
@@ -637,6 +674,8 @@ function renderBoard() {
     .join('') + renderBoardColumn('Complete', complete, true);
 
   container.innerHTML = `<div class="board">${columns}</div>`;
+  const newBoard = container.querySelector('.board');
+  if (newBoard) newBoard.scrollLeft = savedScrollLeft;
 
   container.querySelectorAll('.board-card[data-product-id]').forEach((card) => {
     card.addEventListener('click', () => {
