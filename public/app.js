@@ -1,4 +1,4 @@
-let state = { stages: [], products: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, emailRecipients: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
+let state = { stages: [], products: [], archivedProducts: [], stageDefinitions: [], teamMembers: [], stageDefaults: [], emailSchedule: null, emailRecipients: [], selectedProductIds: new Set(), expandedProductIds: new Set() };
 let activeCell = null; // { productId, stageKey }
 
 // ── API helpers ──────────────────────────────────────
@@ -82,8 +82,9 @@ document.querySelectorAll('.tab-btn').forEach((btn) => {
 // ── Load & render ────────────────────────────────────
 async function loadAll() {
   try {
-    const [timeline, stageDefinitions, syncStatus, teamMembers, stageDefaults, emailSchedule, emailRecipients] = await Promise.all([
+    const [timeline, archivedProducts, stageDefinitions, syncStatus, teamMembers, stageDefaults, emailSchedule, emailRecipients] = await Promise.all([
       api('/timeline'),
+      api('/products?archived=true'),
       api('/stage-definitions'),
       api('/am/status'),
       api('/team-members'),
@@ -93,6 +94,7 @@ async function loadAll() {
     ]);
     state.stages = timeline.stages;
     state.products = timeline.products;
+    state.archivedProducts = archivedProducts;
     state.stageDefinitions = stageDefinitions;
     state.teamMembers = teamMembers;
     state.stageDefaults = stageDefaults;
@@ -509,43 +511,49 @@ function renderBoardColumn(label, cards, isComplete) {
 
 function renderProductsTable() {
   const tbody = document.querySelector('#products-table tbody');
-  tbody.innerHTML = state.products
-    .map(
-      (p) => `
-      <tr>
-        <td>${escapeHtml(p.style_code)}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${p.launch_date ? new Date(p.launch_date).toLocaleDateString() : '—'}</td>
-        <td>${p.percent_complete}%</td>
-        <td><span class="source-badge ${p.source}">${p.source}</span></td>
-        <td>${p.archived ? 'Yes' : 'No'}</td>
-        <td>
-          <button class="link-btn" data-action="edit" data-id="${p.id}">Edit</button>
-          &nbsp;·&nbsp;
-          <button class="link-btn" data-action="toggle-archive" data-id="${p.id}" data-archived="${p.archived}">${p.archived ? 'Unarchive' : 'Archive'}</button>
-        </td>
-      </tr>`
-    )
-    .join('');
+  if (state.archivedProducts.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">No archived products.</td></tr>`;
+  } else {
+    tbody.innerHTML = state.archivedProducts
+      .map(
+        (p) => `
+        <tr>
+          <td>${escapeHtml(p.style_code)}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${p.launch_date ? new Date(p.launch_date).toLocaleDateString() : '—'}</td>
+          <td>${p.percent_complete}%</td>
+          <td><span class="source-badge ${p.source}">${p.source}</span></td>
+          <td>
+            <button class="link-btn" data-action="edit" data-id="${p.id}">Edit</button>
+            &nbsp;·&nbsp;
+            <button class="link-btn" data-action="unarchive" data-id="${p.id}">Unarchive &amp; Reopen</button>
+          </td>
+        </tr>`
+      )
+      .join('');
+  }
 
   tbody.querySelectorAll('[data-action="edit"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const product = state.products.find((p) => p.id === Number(btn.dataset.id));
+      const product = state.archivedProducts.find((p) => p.id === Number(btn.dataset.id));
       openProductModal(product);
     });
   });
-  tbody.querySelectorAll('[data-action="toggle-archive"]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const archived = btn.dataset.archived !== 'true';
-      try {
-        await api(`/products/${btn.dataset.id}`, { method: 'PUT', body: JSON.stringify({ archived }) });
-        toast(archived ? 'Product archived' : 'Product unarchived');
-        loadAll();
-      } catch (e) {
-        toast(e.message, true);
-      }
-    });
+  tbody.querySelectorAll('[data-action="unarchive"]').forEach((btn) => {
+    btn.addEventListener('click', () => unarchiveProduct(btn.dataset.id));
   });
+}
+
+async function unarchiveProduct(id) {
+  if (!confirm('Unarchive this product? Its most recently completed milestone will be reopened so it shows as in-progress again.')) return;
+  try {
+    const result = await api(`/products/${id}/unarchive`, { method: 'POST' });
+    const stage = state.stageDefinitions.find((s) => s.stage_key === result.reopened_stage_key);
+    toast(stage ? `Unarchived — "${stage.label}" reopened` : 'Unarchived');
+    loadAll();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 // ── Modals ───────────────────────────────────────────

@@ -1,18 +1,17 @@
 const express = require('express');
 const { pool } = require('../db');
 const { fetchOpenOrdersForStyle } = require('../lib/amClient');
+const { getTimelineData } = require('../lib/timelineData');
 
 const router = express.Router();
 
+// Shaped the same way as /api/timeline (stage map, percent_complete, etc.)
+// so Admin can show progress on archived products too.
 router.get('/', async (req, res, next) => {
   try {
-    const { archived } = req.query;
-    const showArchived = archived === 'true';
-    const result = await pool.query(
-      `SELECT * FROM products WHERE archived = $1 ORDER BY launch_date NULLS LAST, style_code ASC`,
-      [showArchived]
-    );
-    res.json(result.rows);
+    const showArchived = req.query.archived === 'true';
+    const { products } = await getTimelineData({ archived: showArchived });
+    res.json(products);
   } catch (err) {
     next(err);
   }
@@ -78,6 +77,41 @@ router.put('/:id', async (req, res, next) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/products/:id/unarchive — reopens an archived product by
+// un-archiving it AND reopening the most recently completed milestone
+// (whichever one was checked off last), so it goes back to "in progress"
+// one step before it hit 100%, rather than reappearing already fully done.
+router.post('/:id/unarchive', async (req, res, next) => {
+  try {
+    const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [req.params.id]);
+    if (productCheck.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+
+    const lastStageResult = await pool.query(
+      `SELECT stage_key FROM product_stages
+       WHERE product_id = $1 AND completed_at IS NOT NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+      [req.params.id]
+    );
+    const reopenedStageKey = lastStageResult.rows[0] ? lastStageResult.rows[0].stage_key : null;
+
+    if (reopenedStageKey) {
+      await pool.query(
+        `UPDATE product_stages SET completed_at = NULL, updated_at = now()
+         WHERE product_id = $1 AND stage_key = $2`,
+        [req.params.id, reopenedStageKey]
+      );
+    }
+
+    const result = await pool.query(
+      `UPDATE products SET archived = false, updated_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    res.json({ ...result.rows[0], reopened_stage_key: reopenedStageKey });
   } catch (err) {
     next(err);
   }

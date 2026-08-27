@@ -1,13 +1,15 @@
 const { pool } = require('../db');
 const { getStages } = require('./stages');
 
-// Shared by the /api/timeline route and the weekly email — every active
-// product with its full stage-completion map (owner + note included).
-async function getTimelineData() {
+// Shared by the /api/timeline route, the Admin products list, and the
+// weekly email — every product (active by default, or archived) with its
+// full stage-completion map (owner + note included).
+async function getTimelineData({ archived = false } = {}) {
   const stages = await getStages();
 
   const productsResult = await pool.query(
-    `SELECT * FROM products WHERE archived = false ORDER BY launch_date NULLS LAST, style_code ASC`
+    `SELECT * FROM products WHERE archived = $1 ORDER BY launch_date NULLS LAST, style_code ASC`,
+    [archived]
   );
   const products = productsResult.rows;
   if (products.length === 0) {
