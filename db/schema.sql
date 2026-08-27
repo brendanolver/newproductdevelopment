@@ -84,33 +84,62 @@ CREATE TABLE IF NOT EXISTS stages (
 );
 CREATE INDEX IF NOT EXISTS idx_stages_sort_order ON stages(sort_order);
 
-INSERT INTO stages (stage_key, label, type, sort_order) VALUES
-  ('shopify_synced', 'Shopify Synced', 'boolean', 0),
-  ('ref_sample_purchased', 'Ref Sample Purchased', 'boolean', 1),
-  ('cad_drawing', 'CAD Drawing', 'boolean', 2),
-  ('sent_to_rach', 'Sent to Rach', 'date', 3),
-  ('specs_completed', 'Specs Completed', 'boolean', 4),
-  ('tech_pack_sent', 'Tech Pack Sent', 'date', 5),
-  ('first_sample_comments', 'First Sample Comments', 'date', 6),
-  ('second_sample_comments', 'Second Sample Comments', 'date', 7),
-  ('third_sample_comments', 'Third Sample Comments', 'date', 8),
-  ('approved_for_bulk', 'Approved for Bulk', 'date', 9),
-  ('bulk_order_arrival', 'Bulk Order Arrival', 'date', 10),
-  ('shipping_sample_received', 'Shipping Sample Received', 'boolean', 11),
-  ('flat_lay_images', 'Flat Lay Images', 'boolean', 12),
-  ('stylised_flat_lay_images', 'Stylised Flat Lay Images', 'boolean', 13),
-  ('ecomm_images', 'E-Comm Images', 'boolean', 14)
-ON CONFLICT (stage_key) DO NOTHING;
-
 -- Weekly email recipients, editable from Admin instead of a hardcoded
--- constant / env var. Seeded with the previous hardcoded addresses so
--- upgrading doesn't silently stop emailing anyone.
+-- constant / env var.
 CREATE TABLE IF NOT EXISTS email_recipients (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO email_recipients (email) VALUES
-  ('brendan@kohindustries.com'),
-  ('sheridan@kohindustries.com')
-ON CONFLICT (email) DO NOTHING;
+
+-- Tracks one-time seed scripts so they never re-run. Without this, the
+-- schema (which re-runs in full on every app boot) would silently
+-- resurrect a milestone or email recipient the user had deliberately
+-- deleted, the next time an "ON CONFLICT DO NOTHING" seed found no
+-- conflicting row left to skip.
+CREATE TABLE IF NOT EXISTS schema_seeds (
+  seed_key VARCHAR(64) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Seeds the original 15 stages, but only the very first time this ever
+-- runs against a given database — checked against schema_seeds, not
+-- against which stage_keys currently exist, so deleting a stage in
+-- Admin sticks permanently instead of reappearing on the next deploy.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schema_seeds WHERE seed_key = 'initial_stages') THEN
+    IF NOT EXISTS (SELECT 1 FROM stages) THEN
+      INSERT INTO stages (stage_key, label, type, sort_order) VALUES
+        ('shopify_synced', 'Shopify Synced', 'boolean', 0),
+        ('ref_sample_purchased', 'Ref Sample Purchased', 'boolean', 1),
+        ('cad_drawing', 'CAD Drawing', 'boolean', 2),
+        ('sent_to_rach', 'Sent to Rach', 'date', 3),
+        ('specs_completed', 'Specs Completed', 'boolean', 4),
+        ('tech_pack_sent', 'Tech Pack Sent', 'date', 5),
+        ('first_sample_comments', 'First Sample Comments', 'date', 6),
+        ('second_sample_comments', 'Second Sample Comments', 'date', 7),
+        ('third_sample_comments', 'Third Sample Comments', 'date', 8),
+        ('approved_for_bulk', 'Approved for Bulk', 'date', 9),
+        ('bulk_order_arrival', 'Bulk Order Arrival', 'date', 10),
+        ('shipping_sample_received', 'Shipping Sample Received', 'boolean', 11),
+        ('flat_lay_images', 'Flat Lay Images', 'boolean', 12),
+        ('stylised_flat_lay_images', 'Stylised Flat Lay Images', 'boolean', 13),
+        ('ecomm_images', 'E-Comm Images', 'boolean', 14);
+    END IF;
+    INSERT INTO schema_seeds (seed_key) VALUES ('initial_stages');
+  END IF;
+END $$;
+
+-- Same one-time-only treatment for the default recipient addresses.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM schema_seeds WHERE seed_key = 'initial_email_recipients') THEN
+    IF NOT EXISTS (SELECT 1 FROM email_recipients) THEN
+      INSERT INTO email_recipients (email) VALUES
+        ('brendan@kohindustries.com'),
+        ('sheridan@kohindustries.com');
+    END IF;
+    INSERT INTO schema_seeds (seed_key) VALUES ('initial_email_recipients');
+  END IF;
+END $$;
