@@ -41,22 +41,33 @@ function daysToLaunchLabel(days) {
   return `${days}d`;
 }
 
-// One milestone cell — mirrors the Timeline grid: N/A (grey) if this
-// milestone doesn't apply to this product, a checkmark for done boolean
-// stages, the completion date for done date-type stages, a dash for
-// not-yet-done, and the owner's name underneath (when one is set).
+// One milestone cell — mirrors the Timeline grid exactly: N/A (grey) if
+// this milestone doesn't apply to this product; otherwise a tick (always,
+// regardless of boolean/date type) plus the owner's name plus the
+// completion date, all three whenever it's done. Not done yet shows a
+// dash, the owner if one's set, and — for a date-type stage with a
+// due_date — "Due ..." in place of the (blank) completion date, same as
+// the app.
 function stageCellHtml(stage, entry) {
+  if (entry && entry.not_applicable) {
+    return `<span style="color:#94a3b8;">N/A</span><div style="font-size:9px;color:#94a3b8;margin-top:2px;">&nbsp;</div><div style="font-size:9px;color:#94a3b8;">&nbsp;</div>`;
+  }
   const done = entry && entry.completed_at;
-  const topLine = entry && entry.not_applicable
-    ? `<span style="color:#94a3b8;">N/A</span>`
-    : !done
-      ? `<span style="color:#cbd5e1;">–</span>`
-      : stage.type === 'date'
-        ? `<span style="color:#16a34a;font-weight:700;">${new Date(entry.completed_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}</span>`
-        : `<span style="color:#16a34a;font-weight:700;">&#10003;</span>`;
+  const tickLine = done
+    ? `<span style="color:#16a34a;font-weight:700;">&#10003;</span>`
+    : `<span style="color:#cbd5e1;">–</span>`;
   const ownerName = entry && entry.owner_name;
   const ownerLine = `<div style="font-size:9px;color:#94a3b8;margin-top:2px;">${ownerName ? esc(ownerName) : '&nbsp;'}</div>`;
-  return `${topLine}${ownerLine}`;
+  const isDueLabel = !done && stage.type === 'date' && entry && entry.due_date;
+  const dateLabel = done
+    ? new Date(entry.completed_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })
+    : isDueLabel
+      ? `Due ${new Date(entry.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' })}`
+      : '';
+  const dateColour = done ? '#94a3b8' : isDueLabel ? '#d97706' : '#94a3b8';
+  const dateWeight = isDueLabel ? '700' : '400';
+  const dateLine = `<div style="font-size:9px;color:${dateColour};font-weight:${dateWeight};">${dateLabel ? esc(dateLabel) : '&nbsp;'}</div>`;
+  return `${tickLine}${ownerLine}${dateLine}`;
 }
 
 function buildHtml({ dateLabel, outstanding, atRiskCount, stages }) {
